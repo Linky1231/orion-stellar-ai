@@ -159,7 +159,27 @@ export function ChatApp() {
 
   function newConv() { setConvId(null); setMessages([]); setSidebarOpen(false); }
 
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const toggleSpeak = useCallback((id: string, text: string) => {
+    sfx.tap();
+    if (speakingId === id) {
+      window.speechSynthesis.cancel();
+      setSpeakingId(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "es-ES";
+    u.onend = () => setSpeakingId((cur) => (cur === id ? null : cur));
+    u.onerror = () => setSpeakingId((cur) => (cur === id ? null : cur));
+    window.speechSynthesis.speak(u);
+    setSpeakingId(id);
+  }, [speakingId]);
+
+  useEffect(() => () => window.speechSynthesis.cancel(), []);
+
   return (
+    <SpeechCtx.Provider value={{ speakingId, toggle: toggleSpeak }}>
     <div className="flex h-screen w-full overflow-hidden">
       <Sidebar
         open={sidebarOpen}
