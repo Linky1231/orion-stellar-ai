@@ -61,6 +61,7 @@ export function ChatApp() {
   }
 
   async function send() {
+    if (streaming) return;
     const text = input.trim();
     if (!text && pending.length === 0) return;
 
