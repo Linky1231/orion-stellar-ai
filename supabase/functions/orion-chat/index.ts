@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image",
+          model: "google/gemini-3.1-flash-image-preview",
           messages: [{ role: "user", content: prompt }],
           modalities: ["image", "text"],
         }),
@@ -85,6 +85,7 @@ Deno.serve(async (req) => {
         model: "openai/gpt-5",
         messages: [{ role: "system", content: systemPrompt }, ...(messages || [])],
         stream: true,
+        reasoning: { effort: "minimal" },
       }),
     });
 
