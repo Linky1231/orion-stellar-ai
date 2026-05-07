@@ -1,0 +1,327 @@
+import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import { supabase } from "@/integrations/supabase/client";
+import { getDeviceId } from "@/lib/device";
+import { sfx } from "@/lib/sounds";
+import { streamChat, generateImage, uploadAttachment, type ChatMsg } from "@/lib/orion-api";
+import { OrionLogo } from "./OrionLogo";
+import { Sidebar } from "./Sidebar";
+import { NotesPanel } from "./NotesPanel";
+import { AdminPanel } from "./AdminPanel";
+import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, X } from "lucide-react";
+
+type DBMsg = {
+  id: string; conversation_id: string; role: "user" | "assistant" | "system";
+  content: string; attachments: any[]; created_at: string;
+};
+
+const ADMIN_TOKEN = "Admin7880";
+
+export function ChatApp() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [convId, setConvId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<DBMsg[]>([]);
+  const [input, setInput] = useState("");
+  const [streaming, setStreaming] = useState(false);
+  const [pending, setPending] = useState<{ url: string; type: string; name: string }[]>([]);
+  const [imageMode, setImageMode] = useState(false);
+  const [searchMode, setSearchMode] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { scrollRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }); }, [messages, streaming]);
+
+  async function loadMessages(id: string) {
+    const { data } = await supabase
+      .from("messages").select("*").eq("conversation_id", id).order("created_at");
+    setMessages((data as DBMsg[]) || []);
+  }
+
+  useEffect(() => { if (convId) loadMessages(convId); else setMessages([]); }, [convId]);
+
+  useEffect(() => {
+    if (!convId) return;
+    const ch = supabase
+      .channel(`msg-${convId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${convId}` },
+        (p) => setMessages((m) => (m.some(x => x.id === (p.new as any).id) ? m : [...m, p.new as DBMsg])))
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [convId]);
+
+  async function ensureConv(firstText: string): Promise<string> {
+    if (convId) return convId;
+    const did = getDeviceId();
+    const title = firstText.slice(0, 50) || "Nueva conversación";
+    const { data } = await supabase
+      .from("conversations").insert({ device_id: did, title }).select().single();
+    setConvId((data as any).id);
+    return (data as any).id;
+  }
+
+  async function send() {
+    const text = input.trim();
+    if (!text && pending.length === 0) return;
+
+    // Admin trigger
+    if (text === ADMIN_TOKEN) {
+      sfx.open();
+      setAdminOpen(true);
+      setInput("");
+      return;
+    }
+
+    sfx.send();
+    setInput("");
+    const atts = pending; setPending([]);
+
+    const id = await ensureConv(text);
+
+    // Save user message
+    const userMsg = { conversation_id: id, role: "user" as const, content: text, attachments: atts };
+    const { data: saved } = await supabase.from("messages").insert(userMsg).select().single();
+    if (saved) setMessages((m) => [...m, saved as DBMsg]);
+
+    // Image generation mode
+    if (imageMode) {
+      setStreaming(true);
+      try {
+        const url = await generateImage(text);
+        const { data: a } = await supabase.from("messages").insert({
+          conversation_id: id, role: "assistant",
+          content: `Aquí tienes tu imagen ✨`,
+          attachments: [{ url, type: "image/png", name: "generated.png" }],
+        }).select().single();
+        if (a) setMessages((m) => [...m, a as DBMsg]);
+        sfx.receive();
+      } catch (e: any) {
+        sfx.error();
+        alert("Error generando imagen: " + e.message);
+      }
+      setStreaming(false);
+      setImageMode(false);
+      await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", id);
+      return;
+    }
+
+    // Build chat history for AI (with multimodal content)
+    const history: ChatMsg[] = messages.concat(saved ? [saved as DBMsg] : []).map((m) => {
+      const imgs = (m.attachments || []).filter((a: any) => a.type?.startsWith("image"));
+      if (m.role === "user" && imgs.length) {
+        return {
+          role: "user",
+          content: [
+            { type: "text", text: (searchMode ? "[Buscar info actualizada en internet] " : "") + m.content },
+            ...imgs.map((a: any) => ({ type: "image_url", image_url: { url: a.url } })),
+          ] as any,
+        };
+      }
+      return { role: m.role as any, content: m.content + (searchMode && m.role === "user" ? " [Si necesitas info actualizada, indícalo claramente]" : "") };
+    });
+
+    // Stream assistant
+    setStreaming(true);
+    let acc = "";
+    const tempId = "tmp-" + Date.now();
+    setMessages((m) => [...m, { id: tempId, conversation_id: id, role: "assistant", content: "", attachments: [], created_at: new Date().toISOString() }]);
+
+    try {
+      await streamChat(history, (delta) => {
+        acc += delta;
+        setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: acc } : x));
+      });
+      // Persist final
+      const { data: a } = await supabase.from("messages")
+        .insert({ conversation_id: id, role: "assistant", content: acc })
+        .select().single();
+      setMessages((m) => m.map(x => x.id === tempId ? (a as DBMsg) : x));
+      sfx.receive();
+      await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", id);
+    } catch (e: any) {
+      sfx.error();
+      setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: "⚠️ " + e.message } : x));
+    }
+    setStreaming(false);
+    setSearchMode(false);
+  }
+
+  async function onFile(f: File) {
+    sfx.tap();
+    try {
+      const url = await uploadAttachment(f);
+      setPending((p) => [...p, { url, type: f.type, name: f.name }]);
+    } catch (e: any) { sfx.error(); alert(e.message); }
+  }
+
+  function newConv() { setConvId(null); setMessages([]); setSidebarOpen(false); }
+
+  return (
+    <div className="flex h-screen w-full overflow-hidden">
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        currentId={convId}
+        onSelect={setConvId}
+        onNew={newConv}
+        onOpenNotes={() => setNotesOpen(true)}
+        onCreateImage={() => { newConv(); setImageMode(true); }}
+      />
+
+      <main className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <header className="glass border-b border-border px-4 py-3 flex items-center gap-3">
+          <button className="tap p-2 rounded-lg hover:bg-accent md:hidden" onClick={() => { sfx.tap(); setSidebarOpen(true); }}>
+            <Menu className="w-5 h-5" />
+          </button>
+          <button className="tap hidden md:flex p-2 rounded-lg hover:bg-accent" onClick={() => { sfx.tap(); setSidebarOpen((v) => !v); }}>
+            <Menu className="w-5 h-5" />
+          </button>
+          <OrionLogo size={36} glow={streaming} />
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold tracking-tight leading-tight">Orión Estellar</div>
+            <div className="text-[11px] text-muted-foreground">v5.0 · por Linky</div>
+          </div>
+          <div className="text-xs text-muted-foreground hidden sm:block">GPT-5</div>
+        </header>
+
+        {/* Messages */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6">
+          <div className="max-w-3xl mx-auto space-y-5">
+            {messages.length === 0 && <Welcome imageMode={imageMode} />}
+            {messages.map((m) => <Bubble key={m.id} m={m} />)}
+            {streaming && messages[messages.length - 1]?.role !== "assistant" && (
+              <div className="flex gap-3">
+                <OrionLogo size={28} glow />
+                <div className="text-sm text-muted-foreground">Pensando…</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Composer */}
+        <div className="px-4 pb-4 pt-2">
+          <div className="max-w-3xl mx-auto">
+            {pending.length > 0 && (
+              <div className="flex gap-2 mb-2 flex-wrap">
+                {pending.map((p, i) => (
+                  <div key={i} className="relative bg-card border border-border rounded-xl p-1.5 pr-7 text-xs flex items-center gap-2">
+                    {p.type.startsWith("image") ? <img src={p.url} className="w-8 h-8 rounded object-cover" /> : <Paperclip className="w-4 h-4" />}
+                    <span className="max-w-[120px] truncate">{p.name}</span>
+                    <button className="absolute right-1 top-1 p-0.5 hover:bg-accent rounded" onClick={() => setPending(pending.filter((_, j) => j !== i))}>
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {(imageMode || searchMode) && (
+              <div className="mb-2 flex gap-2">
+                {imageMode && <Tag color="primary" onClose={() => setImageMode(false)}>🎨 Modo imagen</Tag>}
+                {searchMode && <Tag color="primary" onClose={() => setSearchMode(false)}>🔍 Buscar info</Tag>}
+              </div>
+            )}
+            <div className="glass-strong rounded-2xl border border-border shadow-soft p-2 flex items-end gap-1">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                placeholder={imageMode ? "Describe la imagen…" : "Escribe un mensaje…"}
+                rows={1}
+                className="flex-1 bg-transparent outline-none resize-none px-3 py-2 text-sm max-h-40"
+              />
+              <label className="tap p-2 rounded-lg hover:bg-accent cursor-pointer" title="Adjuntar archivo">
+                <Paperclip className="w-4 h-4" />
+                <input type="file" hidden onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+              </label>
+              <button onClick={() => { sfx.tap(); setImageMode((v) => !v); }} className={`tap p-2 rounded-lg ${imageMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Generar imagen">
+                <ImagePlus className="w-4 h-4" />
+              </button>
+              <button onClick={() => { sfx.tap(); setSearchMode((v) => !v); }} className={`tap p-2 rounded-lg ${searchMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Buscar info">
+                <Search className="w-4 h-4" />
+              </button>
+              <button onClick={send} disabled={streaming} className="tap p-2 rounded-lg gradient-orion text-primary-foreground disabled:opacity-50 shadow-glow" title="Enviar">
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="text-[10px] text-center text-muted-foreground mt-2">Orión Estellar puede cometer errores. Verifica info importante.</div>
+          </div>
+        </div>
+      </main>
+
+      <NotesPanel open={notesOpen} onClose={() => setNotesOpen(false)} />
+      <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
+    </div>
+  );
+}
+
+function Tag({ children, onClose }: { children: any; onClose: () => void; color?: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full gradient-orion text-primary-foreground">
+      {children}
+      <button onClick={onClose}><X className="w-3 h-3" /></button>
+    </span>
+  );
+}
+
+function Welcome({ imageMode }: { imageMode: boolean }) {
+  return (
+    <div className="flex flex-col items-center text-center pt-12 pb-8 animate-fade-up">
+      <OrionLogo size={84} glow />
+      <h1 className="text-3xl md:text-4xl font-semibold tracking-tight mt-5">
+        <span className="text-gradient-orion">Orión Estellar</span>
+      </h1>
+      <p className="text-sm text-muted-foreground mt-2 max-w-md">
+        {imageMode ? "Describe la imagen que quieres crear y la generaré con precisión." : "El asistente esencial para creadores indie. Programación, arte, diseño de niveles y mucho más."}
+      </p>
+    </div>
+  );
+}
+
+function Bubble({ m }: { m: DBMsg }) {
+  const isUser = m.role === "user";
+  return (
+    <div className={`flex gap-3 animate-fade-up ${isUser ? "flex-row-reverse" : ""}`}>
+      <div className="shrink-0">
+        {isUser ? (
+          <div className="w-8 h-8 rounded-full gradient-orion flex items-center justify-center text-primary-foreground">
+            <User className="w-4 h-4" />
+          </div>
+        ) : (
+          <OrionLogo size={32} />
+        )}
+      </div>
+      <div className={`max-w-[85%] ${isUser ? "items-end" : "items-start"} flex flex-col gap-1.5`}>
+        {(m.attachments || []).map((a: any, i) => (
+          a.type?.startsWith("image") ? (
+            <img key={i} src={a.url} alt="" className="rounded-2xl max-h-80 border border-border shadow-soft" />
+          ) : (
+            <a key={i} href={a.url} target="_blank" className="text-xs underline">{a.name}</a>
+          )
+        ))}
+        {m.content && (
+          <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-soft
+            ${isUser ? "gradient-orion text-primary-foreground rounded-br-sm" : "bg-card border border-border rounded-bl-sm"}`}>
+            {isUser ? (
+              <div className="whitespace-pre-wrap">{m.content}</div>
+            ) : (
+              <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1.5 prose-pre:bg-muted prose-pre:text-foreground">
+                <ReactMarkdown>{m.content}</ReactMarkdown>
+              </div>
+            )}
+          </div>
+        )}
+        {!isUser && m.content && (
+          <div className="flex gap-1 opacity-50 hover:opacity-100 transition">
+            <button onClick={() => { navigator.clipboard.writeText(m.content); sfx.tap(); }} className="tap p-1 rounded hover:bg-accent">
+              <Copy className="w-3 h-3" />
+            </button>
+            <button onClick={() => { const u = new SpeechSynthesisUtterance(m.content); u.lang = "es-ES"; speechSynthesis.speak(u); sfx.tap(); }} className="tap p-1 rounded hover:bg-accent">
+              <Volume2 className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
