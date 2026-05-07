@@ -340,9 +340,8 @@ function Bubble({ m }: { m: DBMsg }) {
             <button onClick={() => { navigator.clipboard.writeText(m.content); sfx.tap(); }} className="tap p-1 rounded hover:bg-accent">
               <Copy className="w-3 h-3" />
             </button>
-            <button onClick={() => { const u = new SpeechSynthesisUtterance(m.content); u.lang = "es-ES"; speechSynthesis.speak(u); sfx.tap(); }} className="tap p-1 rounded hover:bg-accent">
-              <Volume2 className="w-3 h-3" />
-            </button>
+            <SpeakBtn id={m.id} text={m.content} />
+
           </div>
         )}
       </div>
