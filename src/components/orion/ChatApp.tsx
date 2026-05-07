@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, createContext, useContext, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
@@ -8,7 +8,9 @@ import { OrionLogo } from "./OrionLogo";
 import { Sidebar } from "./Sidebar";
 import { NotesPanel } from "./NotesPanel";
 import { AdminPanel } from "./AdminPanel";
-import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, X } from "lucide-react";
+import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X } from "lucide-react";
+
+const SpeechCtx = createContext<{ speakingId: string | null; toggle: (id: string, text: string) => void }>({ speakingId: null, toggle: () => {} });
 
 type DBMsg = {
   id: string; conversation_id: string; role: "user" | "assistant" | "system";
@@ -61,6 +63,7 @@ export function ChatApp() {
   }
 
   async function send() {
+    if (streaming) return;
     const text = input.trim();
     if (!text && pending.length === 0) return;
 
@@ -156,7 +159,27 @@ export function ChatApp() {
 
   function newConv() { setConvId(null); setMessages([]); setSidebarOpen(false); }
 
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const toggleSpeak = useCallback((id: string, text: string) => {
+    sfx.tap();
+    if (speakingId === id) {
+      window.speechSynthesis.cancel();
+      setSpeakingId(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "es-ES";
+    u.onend = () => setSpeakingId((cur) => (cur === id ? null : cur));
+    u.onerror = () => setSpeakingId((cur) => (cur === id ? null : cur));
+    window.speechSynthesis.speak(u);
+    setSpeakingId(id);
+  }, [speakingId]);
+
+  useEffect(() => () => window.speechSynthesis.cancel(), []);
+
   return (
+    <SpeechCtx.Provider value={{ speakingId, toggle: toggleSpeak }}>
     <div className="flex h-screen w-full overflow-hidden">
       <Sidebar
         open={sidebarOpen}
@@ -252,6 +275,7 @@ export function ChatApp() {
       <NotesPanel open={notesOpen} onClose={() => setNotesOpen(false)} />
       <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
     </div>
+    </SpeechCtx.Provider>
   );
 }
 
@@ -316,12 +340,21 @@ function Bubble({ m }: { m: DBMsg }) {
             <button onClick={() => { navigator.clipboard.writeText(m.content); sfx.tap(); }} className="tap p-1 rounded hover:bg-accent">
               <Copy className="w-3 h-3" />
             </button>
-            <button onClick={() => { const u = new SpeechSynthesisUtterance(m.content); u.lang = "es-ES"; speechSynthesis.speak(u); sfx.tap(); }} className="tap p-1 rounded hover:bg-accent">
-              <Volume2 className="w-3 h-3" />
-            </button>
+            <SpeakBtn id={m.id} text={m.content} />
+
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function SpeakBtn({ id, text }: { id: string; text: string }) {
+  const { speakingId, toggle } = useContext(SpeechCtx);
+  const active = speakingId === id;
+  return (
+    <button onClick={() => toggle(id, text)} className={`tap p-1 rounded hover:bg-accent ${active ? "text-primary" : ""}`} title={active ? "Detener" : "Leer"}>
+      {active ? <Square className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+    </button>
   );
 }
