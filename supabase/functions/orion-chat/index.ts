@@ -85,7 +85,6 @@ Deno.serve(async (req) => {
         model: "openai/gpt-5",
         messages: [{ role: "system", content: systemPrompt }, ...(messages || [])],
         stream: true,
-        reasoning: { effort: "minimal" },
       }),
     });
 
