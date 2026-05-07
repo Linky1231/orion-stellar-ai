@@ -348,3 +348,13 @@ function Bubble({ m }: { m: DBMsg }) {
     </div>
   );
 }
+
+function SpeakBtn({ id, text }: { id: string; text: string }) {
+  const { speakingId, toggle } = useContext(SpeechCtx);
+  const active = speakingId === id;
+  return (
+    <button onClick={() => toggle(id, text)} className={`tap p-1 rounded hover:bg-accent ${active ? "text-primary" : ""}`} title={active ? "Detener" : "Leer"}>
+      {active ? <Square className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+    </button>
+  );
+}
