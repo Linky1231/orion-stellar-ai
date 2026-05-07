@@ -14,7 +14,167 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      conversations: {
+        Row: {
+          created_at: string
+          device_id: string
+          id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          id?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          attachments: Json
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          role: string
+        }
+        Insert: {
+          attachments?: Json
+          content?: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          role: string
+        }
+        Update: {
+          attachments?: Json
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notes: {
+        Row: {
+          content: string
+          created_at: string
+          device_id: string
+          id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          device_id: string
+          id?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          device_id?: string
+          id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      orion_config: {
+        Row: {
+          behavior: string
+          context: string
+          extra_params: Json
+          id: number
+          personality: string
+          updated_at: string
+        }
+        Insert: {
+          behavior?: string
+          context?: string
+          extra_params?: Json
+          id?: number
+          personality?: string
+          updated_at?: string
+        }
+        Update: {
+          behavior?: string
+          context?: string
+          extra_params?: Json
+          id?: number
+          personality?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      orion_knowledge: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      orion_reference_images: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          name: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          name: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          url?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
