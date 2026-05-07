@@ -275,6 +275,7 @@ export function ChatApp() {
       <NotesPanel open={notesOpen} onClose={() => setNotesOpen(false)} />
       <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
     </div>
+    </SpeechCtx.Provider>
   );
 }
 
