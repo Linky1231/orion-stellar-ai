@@ -85,6 +85,8 @@ export function ChatApp() {
     const userMsg = { conversation_id: id, role: "user" as const, content: text, attachments: atts };
     const { data: saved } = await supabase.from("messages").insert(userMsg).select().single();
     if (saved) setMessages((m) => [...m, saved as DBMsg]);
+    // Fire-and-forget memory extraction
+    extractAndStoreMemory(text);
 
     // Image generation mode
     if (imageMode) {
