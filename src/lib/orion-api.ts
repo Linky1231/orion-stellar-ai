@@ -1,19 +1,18 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getDeviceId } from "@/lib/device";
 
 const FN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orion-chat`;
 const ANON = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 export type ChatMsg = { role: "user" | "assistant" | "system"; content: any };
 
-export async function streamChat(
-  messages: ChatMsg[],
-  onDelta: (s: string) => void,
-  signal?: AbortSignal,
-) {
+const HEADERS = { "content-type": "application/json", apikey: ANON, authorization: `Bearer ${ANON}` };
+
+export async function streamChat(messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
   const r = await fetch(FN_URL, {
     method: "POST",
-    headers: { "content-type": "application/json", apikey: ANON, authorization: `Bearer ${ANON}` },
-    body: JSON.stringify({ mode: "chat", messages }),
+    headers: HEADERS,
+    body: JSON.stringify({ mode: "chat", messages, deviceId: getDeviceId() }),
     signal,
   });
   if (!r.ok || !r.body) {
@@ -49,11 +48,7 @@ export async function streamChat(
 }
 
 export async function generateImage(prompt: string): Promise<string> {
-  const r = await fetch(FN_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json", apikey: ANON, authorization: `Bearer ${ANON}` },
-    body: JSON.stringify({ mode: "image", prompt }),
-  });
+  const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ mode: "image", prompt }) });
   const d = await r.json();
   if (!d.imageUrl) throw new Error("No image returned");
   return d.imageUrl;
@@ -65,4 +60,27 @@ export async function uploadAttachment(file: File, bucket = "chat-attachments"):
   if (error) throw error;
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
   return data.publicUrl;
+}
+
+// Memory: extract facts from a user message and store them
+export async function extractAndStoreMemory(text: string) {
+  if (!text || text.length < 8) return;
+  try {
+    const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ mode: "extract-memory", text }) });
+    const { facts } = await r.json();
+    if (!Array.isArray(facts) || facts.length === 0) return;
+    const did = getDeviceId();
+    await supabase.from("user_memory" as any).insert(facts.map((f: any) => ({ device_id: did, content: f.content, kind: f.kind || "fact" })));
+  } catch (e) { console.warn("memory extract failed", e); }
+}
+
+export async function classifyNote(title: string, content: string) {
+  const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ mode: "classify-note", title, content }) });
+  return r.json();
+}
+
+export async function analyzeProject(notes: any[]): Promise<string> {
+  const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ mode: "analyze-project", notes }) });
+  const d = await r.json();
+  return d.analysis || "";
 }
