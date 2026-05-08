@@ -17,6 +17,8 @@ export async function streamChat(messages: ChatMsg[], onDelta: (s: string) => vo
   });
   if (!r.ok || !r.body) {
     const t = await r.text().catch(() => "");
+    if (r.status === 402) throw new Error("Sin créditos en Lovable AI. Añade saldo en Settings → Workspace → Cloud & AI balance.");
+    if (r.status === 429) throw new Error("Demasiadas peticiones. Espera unos segundos e intenta de nuevo.");
     throw new Error(t || `HTTP ${r.status}`);
   }
   const reader = r.body.getReader();
