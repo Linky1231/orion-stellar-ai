@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: { authorization: `Bearer ${LOVABLE_API_KEY}`, "content-type": "application/json" },
       body: JSON.stringify({
-        model: "openai/gpt-5",
+        model: "google/gemini-2.5-flash",
         messages: [{ role: "system", content: systemPrompt }, ...(messages || [])],
         stream: true,
       }),
