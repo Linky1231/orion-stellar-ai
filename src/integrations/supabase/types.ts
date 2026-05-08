@@ -73,32 +73,91 @@ export type Database = {
           },
         ]
       }
-      notes: {
+      note_folders: {
         Row: {
-          content: string
+          color: string
           created_at: string
           device_id: string
           id: string
+          name: string
+          section: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          device_id: string
+          id?: string
+          name?: string
+          section?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          device_id?: string
+          id?: string
+          name?: string
+          section?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      notes: {
+        Row: {
+          ai_summary: string | null
+          category: string | null
+          content: string
+          created_at: string
+          device_id: string
+          folder_id: string | null
+          id: string
+          last_activity: string
+          section: string
+          status: string
           title: string
           updated_at: string
         }
         Insert: {
+          ai_summary?: string | null
+          category?: string | null
           content?: string
           created_at?: string
           device_id: string
+          folder_id?: string | null
           id?: string
+          last_activity?: string
+          section?: string
+          status?: string
           title?: string
           updated_at?: string
         }
         Update: {
+          ai_summary?: string | null
+          category?: string | null
           content?: string
           created_at?: string
           device_id?: string
+          folder_id?: string | null
           id?: string
+          last_activity?: string
+          section?: string
+          status?: string
           title?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "notes_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "note_folders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       orion_config: {
         Row: {
@@ -172,6 +231,30 @@ export type Database = {
           id?: string
           name?: string
           url?: string
+        }
+        Relationships: []
+      }
+      user_memory: {
+        Row: {
+          content: string
+          created_at: string
+          device_id: string
+          id: string
+          kind: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          device_id: string
+          id?: string
+          kind?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          device_id?: string
+          id?: string
+          kind?: string
         }
         Relationships: []
       }
