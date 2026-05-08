@@ -207,7 +207,7 @@ export function ChatApp() {
             <div className="font-semibold tracking-tight leading-tight">Orión Estellar</div>
             <div className="text-[11px] text-muted-foreground">v5.0 · por Linky</div>
           </div>
-          <div className="text-xs text-muted-foreground hidden sm:block">GPT-5</div>
+          <div className="text-xs text-muted-foreground hidden sm:block">Gemini 2.5</div>
         </header>
 
         {/* Messages */}
