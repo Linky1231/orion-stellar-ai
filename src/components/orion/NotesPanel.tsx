@@ -246,8 +246,9 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
                       </select>
                       <button
                         onClick={(e) => { e.stopPropagation(); deleteFolder(f.id); }}
-                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-0.5 text-destructive"
-                      ><Trash2 className="w-3 h-3" /></button>
+                        title="Eliminar carpeta"
+                        className="absolute top-1 right-1 p-1 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20"
+                      ><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   );
                 })}
