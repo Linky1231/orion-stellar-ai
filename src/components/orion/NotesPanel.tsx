@@ -198,8 +198,8 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar: folders + notes */}
-        <aside className="w-72 md:w-80 border-r border-border flex flex-col">
+        {/* Sidebar: folders + notes — hidden on mobile when a note or analysis is open */}
+        <aside className={`${(active || analysis !== null) ? "hidden md:flex" : "flex"} w-full md:w-80 border-r border-border flex-col`}>
           {/* Breadcrumb */}
           <div className="p-3 flex items-center gap-2 border-b border-border">
             {activeFolder ? (
