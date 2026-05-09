@@ -9,7 +9,7 @@ import {
   ChevronRight, ArrowLeft, Wand2, Loader2,
   Heading1, Heading2, Heading3, ListChecks, List, Code,
 } from "lucide-react";
-import { useRef } from "react";
+
 
 type Note = {
   id: string;
