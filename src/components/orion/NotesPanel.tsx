@@ -7,7 +7,9 @@ import { OrionLogo } from "./OrionLogo";
 import {
   X, Plus, Trash2, Save, Folder, FolderPlus, Sparkles, Brain,
   ChevronRight, ArrowLeft, Wand2, Loader2,
+  Heading1, Heading2, Heading3, ListChecks, List, Code,
 } from "lucide-react";
+import { useRef } from "react";
 
 type Note = {
   id: string;
