@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
@@ -6,8 +6,7 @@ import { classifyNote, analyzeProject } from "@/lib/orion-api";
 import { OrionLogo } from "./OrionLogo";
 import {
   X, Plus, Trash2, Save, Folder, FolderPlus, Sparkles, Brain,
-  ChevronRight, ArrowLeft, Wand2, Loader2,
-  Heading1, Heading2, Heading3, ListChecks, List, Code,
+  ArrowLeft, Wand2, Loader2,
 } from "lucide-react";
 
 
@@ -58,40 +57,6 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
   const [classifying, setClassifying] = useState(false);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const editorRef = useRef<HTMLTextAreaElement>(null);
-
-  function insertMd(prefix: string, opts: { block?: boolean; wrap?: string } = {}) {
-    if (!active) return;
-    const ta = editorRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const value = active.content;
-    const selected = value.slice(start, end);
-    let insertion = "";
-    let cursorOffset = 0;
-    if (opts.wrap) {
-      insertion = `${opts.wrap}${selected || "código"}${opts.wrap}`;
-      cursorOffset = insertion.length;
-    } else if (opts.block) {
-      const lines = (selected || "texto").split("\n");
-      insertion = lines.map((l) => `${prefix}${l}`).join("\n");
-      cursorOffset = insertion.length;
-    } else {
-      const before = value.slice(0, start);
-      const needsNl = before.length > 0 && !before.endsWith("\n");
-      insertion = `${needsNl ? "\n" : ""}${prefix}${selected || ""}`;
-      cursorOffset = insertion.length;
-    }
-    const next = value.slice(0, start) + insertion + value.slice(end);
-    setActive({ ...active, content: next });
-    requestAnimationFrame(() => {
-      ta.focus();
-      const pos = start + cursorOffset;
-      ta.setSelectionRange(pos, pos);
-    });
-  }
-
   async function load() {
     const did = getDeviceId();
     const [f, n] = await Promise.all([
@@ -281,8 +246,9 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
                       </select>
                       <button
                         onClick={(e) => { e.stopPropagation(); deleteFolder(f.id); }}
-                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-0.5 text-destructive"
-                      ><Trash2 className="w-3 h-3" /></button>
+                        title="Eliminar carpeta"
+                        className="absolute top-1 right-1 p-1 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20"
+                      ><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   );
                 })}
@@ -307,7 +273,11 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
                         {n.ai_summary || new Date(n.updated_at).toLocaleDateString()}
                       </div>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); remove(n.id); }} className="opacity-0 group-hover:opacity-100 p-1 text-destructive">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); if (confirm("¿Eliminar nota?")) remove(n.id); }}
+                      title="Eliminar nota"
+                      className="p-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 shrink-0"
+                    >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -383,21 +353,11 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
                     {active.ai_summary}
                   </div>
                 )}
-                <div className="flex flex-wrap items-center gap-1 border border-border rounded-lg p-1 bg-card/50 sticky top-0 z-10">
-                  <button onClick={() => insertMd("# ")} title="Título H1" className="tap p-1.5 rounded hover:bg-accent"><Heading1 className="w-4 h-4" /></button>
-                  <button onClick={() => insertMd("## ")} title="Subtítulo H2" className="tap p-1.5 rounded hover:bg-accent"><Heading2 className="w-4 h-4" /></button>
-                  <button onClick={() => insertMd("### ")} title="Detalle H3" className="tap p-1.5 rounded hover:bg-accent"><Heading3 className="w-4 h-4" /></button>
-                  <span className="w-px h-5 bg-border mx-1" />
-                  <button onClick={() => insertMd("- [ ] ", { block: true })} title="Checklist" className="tap p-1.5 rounded hover:bg-accent"><ListChecks className="w-4 h-4" /></button>
-                  <button onClick={() => insertMd("- ", { block: true })} title="Lista" className="tap p-1.5 rounded hover:bg-accent"><List className="w-4 h-4" /></button>
-                  <button onClick={() => insertMd("", { wrap: "`" })} title="Código" className="tap p-1.5 rounded hover:bg-accent"><Code className="w-4 h-4" /></button>
-                </div>
                 <textarea
-                  ref={editorRef}
                   value={active.content}
                   onChange={(e) => setActive({ ...active, content: e.target.value })}
-                  placeholder="Escribe tus ideas, mecánicas, bugs, diálogos, sistemas, mapas, tareas, inspiración… Usa la barra para añadir títulos, checklists o código."
-                  className="flex-1 bg-transparent outline-none resize-none text-sm leading-relaxed min-h-[300px] font-mono"
+                  placeholder="Escribe tus ideas, mecánicas, bugs, diálogos, sistemas, mapas, tareas, inspiración… Orión detectará el contexto automáticamente."
+                  className="flex-1 bg-transparent outline-none resize-none text-sm leading-relaxed min-h-[300px]"
                 />
               </div>
             </>
