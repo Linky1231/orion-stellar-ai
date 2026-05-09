@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: t }), { status: r.status, headers: { ...corsHeaders, "content-type": "application/json" } });
     }
 
-    return new Response(r.body, { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
+    return new Response(stripReasoningStream(r.body), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...corsHeaders, "content-type": "application/json" } });
   }
