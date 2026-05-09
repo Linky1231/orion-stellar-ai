@@ -9,7 +9,28 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+const FREE_AI_URL = "https://text.pollinations.ai/openai";
+const FREE_TEXT_MODEL = "openai-fast";
+
+function extractJsonObject(text: string) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return {};
+  try { return JSON.parse(text.slice(start, end + 1)); } catch { return {}; }
+}
+
+async function freeAI(messages: any[], stream = false, jsonMode = false) {
+  return fetch(FREE_AI_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model: FREE_TEXT_MODEL,
+      messages,
+      stream,
+      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+    }),
+  });
+}
 
 async function sb(path: string, init: RequestInit = {}) {
   return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -23,20 +44,14 @@ async function sb(path: string, init: RequestInit = {}) {
   });
 }
 
-async function aiJSON(messages: any[], schema: any, name: string, model = "google/gemini-2.5-flash") {
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { authorization: `Bearer ${LOVABLE_API_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages,
-      tools: [{ type: "function", function: { name, description: "Return structured data", parameters: schema } }],
-      tool_choice: { type: "function", function: { name } },
-    }),
-  });
+async function aiJSON(messages: any[], schema: any, name: string, _model = FREE_TEXT_MODEL) {
+  const r = await freeAI([
+    { role: "system", content: `Devuelve únicamente JSON válido para la función ${name}, sin markdown ni explicación. Esquema esperado: ${JSON.stringify(schema)}` },
+    ...messages,
+  ], false, true);
   const d = await r.json();
-  const args = d.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-  try { return JSON.parse(args || "{}"); } catch { return {}; }
+  const content = d.choices?.[0]?.message?.content || "{}";
+  try { return JSON.parse(content); } catch { return extractJsonObject(content); }
 }
 
 Deno.serve(async (req) => {
