@@ -198,8 +198,8 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar: folders + notes */}
-        <aside className="w-72 md:w-80 border-r border-border flex flex-col">
+        {/* Sidebar: folders + notes — hidden on mobile when a note or analysis is open */}
+        <aside className={`${(active || analysis !== null) ? "hidden md:flex" : "flex"} w-full md:w-80 border-r border-border flex-col`}>
           {/* Breadcrumb */}
           <div className="p-3 flex items-center gap-2 border-b border-border">
             {activeFolder ? (
@@ -288,7 +288,7 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
         </aside>
 
         {/* Editor / analysis */}
-        <section className="flex-1 flex flex-col min-w-0">
+        <section className={`${(active || analysis !== null) ? "flex" : "hidden md:flex"} flex-1 flex-col min-w-0`}>
           {analysis !== null ? (
             <div className="flex-1 overflow-y-auto p-6">
               <div className="max-w-3xl mx-auto">
@@ -310,6 +310,7 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
           ) : active ? (
             <>
               <div className="p-3 border-b border-border flex items-center gap-2 flex-wrap">
+                <button onClick={() => setActive(null)} className="md:hidden tap p-1 rounded-lg hover:bg-accent"><ArrowLeft className="w-4 h-4" /></button>
                 <span className="text-xs text-muted-foreground">Estado:</span>
                 <select
                   value={active.status}
