@@ -32,6 +32,43 @@ async function freeAI(messages: any[], stream = false, jsonMode = false) {
   });
 }
 
+function stripReasoningStream(body: ReadableStream<Uint8Array> | null) {
+  if (!body) return null;
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buffer = "";
+  return body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      buffer += decoder.decode(chunk, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf("\n")) !== -1) {
+        let line = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 1);
+        if (line.endsWith("\r")) line = line.slice(0, -1);
+        if (!line.startsWith("data: ")) {
+          if (line === "") controller.enqueue(encoder.encode("\n"));
+          continue;
+        }
+        const json = line.slice(6).trim();
+        if (json === "[DONE]") {
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          continue;
+        }
+        try {
+          const event = JSON.parse(json);
+          const delta = event.choices?.[0]?.delta;
+          if (!delta?.content) continue;
+          delete delta.reasoning;
+          delete delta.reasoning_content;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        } catch {
+          // Drop malformed partial events; the next chunk will contain a complete line.
+        }
+      }
+    },
+  }));
+}
+
 async function sb(path: string, init: RequestInit = {}) {
   return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...init,
