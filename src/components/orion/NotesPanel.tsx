@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
@@ -6,8 +6,7 @@ import { classifyNote, analyzeProject } from "@/lib/orion-api";
 import { OrionLogo } from "./OrionLogo";
 import {
   X, Plus, Trash2, Save, Folder, FolderPlus, Sparkles, Brain,
-  ChevronRight, ArrowLeft, Wand2, Loader2,
-  Heading1, Heading2, Heading3, ListChecks, List, Code,
+  ArrowLeft, Wand2, Loader2,
 } from "lucide-react";
 
 
