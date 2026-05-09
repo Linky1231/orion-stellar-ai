@@ -310,6 +310,7 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
           ) : active ? (
             <>
               <div className="p-3 border-b border-border flex items-center gap-2 flex-wrap">
+                <button onClick={() => setActive(null)} className="md:hidden tap p-1 rounded-lg hover:bg-accent"><ArrowLeft className="w-4 h-4" /></button>
                 <span className="text-xs text-muted-foreground">Estado:</span>
                 <select
                   value={active.status}
