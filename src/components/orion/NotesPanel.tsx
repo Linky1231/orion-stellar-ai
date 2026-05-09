@@ -348,21 +348,11 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
                     {active.ai_summary}
                   </div>
                 )}
-                <div className="flex flex-wrap items-center gap-1 border border-border rounded-lg p-1 bg-card/50 sticky top-0 z-10">
-                  <button onClick={() => insertMd("# ")} title="Título H1" className="tap p-1.5 rounded hover:bg-accent"><Heading1 className="w-4 h-4" /></button>
-                  <button onClick={() => insertMd("## ")} title="Subtítulo H2" className="tap p-1.5 rounded hover:bg-accent"><Heading2 className="w-4 h-4" /></button>
-                  <button onClick={() => insertMd("### ")} title="Detalle H3" className="tap p-1.5 rounded hover:bg-accent"><Heading3 className="w-4 h-4" /></button>
-                  <span className="w-px h-5 bg-border mx-1" />
-                  <button onClick={() => insertMd("- [ ] ", { block: true })} title="Checklist" className="tap p-1.5 rounded hover:bg-accent"><ListChecks className="w-4 h-4" /></button>
-                  <button onClick={() => insertMd("- ", { block: true })} title="Lista" className="tap p-1.5 rounded hover:bg-accent"><List className="w-4 h-4" /></button>
-                  <button onClick={() => insertMd("", { wrap: "`" })} title="Código" className="tap p-1.5 rounded hover:bg-accent"><Code className="w-4 h-4" /></button>
-                </div>
                 <textarea
-                  ref={editorRef}
                   value={active.content}
                   onChange={(e) => setActive({ ...active, content: e.target.value })}
-                  placeholder="Escribe tus ideas, mecánicas, bugs, diálogos, sistemas, mapas, tareas, inspiración… Usa la barra para añadir títulos, checklists o código."
-                  className="flex-1 bg-transparent outline-none resize-none text-sm leading-relaxed min-h-[300px] font-mono"
+                  placeholder="Escribe tus ideas, mecánicas, bugs, diálogos, sistemas, mapas, tareas, inspiración… Orión detectará el contexto automáticamente."
+                  className="flex-1 bg-transparent outline-none resize-none text-sm leading-relaxed min-h-[300px]"
                 />
               </div>
             </>
