@@ -9,7 +9,65 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+const FREE_AI_URL = "https://text.pollinations.ai/openai";
+const FREE_TEXT_MODEL = "openai-fast";
+
+function extractJsonObject(text: string) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return {};
+  try { return JSON.parse(text.slice(start, end + 1)); } catch { return {}; }
+}
+
+async function freeAI(messages: any[], stream = false, jsonMode = false) {
+  return fetch(FREE_AI_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model: FREE_TEXT_MODEL,
+      messages,
+      stream,
+      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+    }),
+  });
+}
+
+function stripReasoningStream(body: ReadableStream<Uint8Array> | null) {
+  if (!body) return null;
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buffer = "";
+  return body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      buffer += decoder.decode(chunk, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf("\n")) !== -1) {
+        let line = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 1);
+        if (line.endsWith("\r")) line = line.slice(0, -1);
+        if (!line.startsWith("data: ")) {
+          if (line === "") controller.enqueue(encoder.encode("\n"));
+          continue;
+        }
+        const json = line.slice(6).trim();
+        if (json === "[DONE]") {
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          continue;
+        }
+        try {
+          const event = JSON.parse(json);
+          const delta = event.choices?.[0]?.delta;
+          if (!delta?.content) continue;
+          delete delta.reasoning;
+          delete delta.reasoning_content;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        } catch {
+          // Drop malformed partial events; the next chunk will contain a complete line.
+        }
+      }
+    },
+  }));
+}
 
 async function sb(path: string, init: RequestInit = {}) {
   return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -23,20 +81,14 @@ async function sb(path: string, init: RequestInit = {}) {
   });
 }
 
-async function aiJSON(messages: any[], schema: any, name: string, model = "google/gemini-2.5-flash") {
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { authorization: `Bearer ${LOVABLE_API_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages,
-      tools: [{ type: "function", function: { name, description: "Return structured data", parameters: schema } }],
-      tool_choice: { type: "function", function: { name } },
-    }),
-  });
+async function aiJSON(messages: any[], schema: any, name: string, _model = FREE_TEXT_MODEL) {
+  const r = await freeAI([
+    { role: "system", content: `Devuelve únicamente JSON válido para la función ${name}, sin markdown ni explicación. Esquema esperado: ${JSON.stringify(schema)}` },
+    ...messages,
+  ], false, true);
   const d = await r.json();
-  const args = d.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-  try { return JSON.parse(args || "{}"); } catch { return {}; }
+  const content = d.choices?.[0]?.message?.content || "{}";
+  try { return JSON.parse(content); } catch { return extractJsonObject(content); }
 }
 
 Deno.serve(async (req) => {
@@ -48,17 +100,8 @@ Deno.serve(async (req) => {
 
     // Image generation
     if (mode === "image") {
-      const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { authorization: `Bearer ${LOVABLE_API_KEY}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          model: "google/gemini-3.1-flash-image-preview",
-          messages: [{ role: "user", content: prompt }],
-          modalities: ["image", "text"],
-        }),
-      });
-      const data = await r.json();
-      const url = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+      const cleanPrompt = encodeURIComponent(String(prompt || "imagen creativa"));
+      const url = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&seed=${Date.now()}`;
       return new Response(JSON.stringify({ imageUrl: url }), {
         headers: { ...corsHeaders, "content-type": "application/json" },
       });
@@ -111,17 +154,10 @@ Deno.serve(async (req) => {
 
     // Analyze project across notes
     if (mode === "analyze-project") {
-      const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { authorization: `Bearer ${LOVABLE_API_KEY}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          model: "openai/gpt-5-mini",
-          messages: [
-            { role: "system", content: "Eres Orión, analista de proyectos indie. Analiza las notas y detecta: tareas abandonadas, sistemas incompletos, scope creep, contradicciones, prioridades rotas. Sé directo, claro, en español, con bullets y emojis. Da consejos accionables y personalizados." },
-            { role: "user", content: `Notas del proyecto:\n\n${(notes || []).map((n: any) => `### [${n.status}] ${n.category || "?"} — ${n.title}\n${n.content}\n(Última actividad: ${n.last_activity})`).join("\n\n")}` },
-          ],
-        }),
-      });
+      const r = await freeAI([
+        { role: "system", content: "Eres Orión, analista de proyectos indie. Analiza las notas y detecta: tareas abandonadas, sistemas incompletos, scope creep, contradicciones, prioridades rotas. Sé directo, claro, en español, con bullets y emojis. Da consejos accionables y personalizados." },
+        { role: "user", content: `Notas del proyecto:\n\n${(notes || []).map((n: any) => `### [${n.status}] ${n.category || "?"} — ${n.title}\n${n.content}\n(Última actividad: ${n.last_activity})`).join("\n\n")}` },
+      ]);
       const d = await r.json();
       return new Response(JSON.stringify({ analysis: d.choices?.[0]?.message?.content || "" }), { headers: { ...corsHeaders, "content-type": "application/json" } });
     }
@@ -147,22 +183,14 @@ Deno.serve(async (req) => {
 
     const systemPrompt = `${cfg.context || ""}\n\nPersonalidad: ${cfg.personality || ""}\n\nComportamiento: ${cfg.behavior || ""}${kbText}${refText}${memText}${notesText}\n\nUsa el contexto personal y las notas para personalizar tus respuestas. Cuando sea relevante, haz referencia a lo que sabes del usuario y su proyecto.`;
 
-    const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { authorization: `Bearer ${LOVABLE_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [{ role: "system", content: systemPrompt }, ...(messages || [])],
-        stream: true,
-      }),
-    });
+    const r = await freeAI([{ role: "system", content: systemPrompt }, ...(messages || [])], true);
 
     if (!r.ok) {
       const t = await r.text();
       return new Response(JSON.stringify({ error: t }), { status: r.status, headers: { ...corsHeaders, "content-type": "application/json" } });
     }
 
-    return new Response(r.body, { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
+    return new Response(stripReasoningStream(r.body), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...corsHeaders, "content-type": "application/json" } });
   }
