@@ -288,7 +288,7 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
         </aside>
 
         {/* Editor / analysis */}
-        <section className="flex-1 flex flex-col min-w-0">
+        <section className={`${(active || analysis !== null) ? "flex" : "hidden md:flex"} flex-1 flex-col min-w-0`}>
           {analysis !== null ? (
             <div className="flex-1 overflow-y-auto p-6">
               <div className="max-w-3xl mx-auto">
