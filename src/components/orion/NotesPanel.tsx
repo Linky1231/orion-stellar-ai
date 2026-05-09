@@ -273,7 +273,11 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
                         {n.ai_summary || new Date(n.updated_at).toLocaleDateString()}
                       </div>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); remove(n.id); }} className="opacity-0 group-hover:opacity-100 p-1 text-destructive">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); if (confirm("¿Eliminar nota?")) remove(n.id); }}
+                      title="Eliminar nota"
+                      className="p-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 shrink-0"
+                    >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
