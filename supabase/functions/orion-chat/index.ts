@@ -63,17 +63,8 @@ Deno.serve(async (req) => {
 
     // Image generation
     if (mode === "image") {
-      const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { authorization: `Bearer ${LOVABLE_API_KEY}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          model: "google/gemini-3.1-flash-image-preview",
-          messages: [{ role: "user", content: prompt }],
-          modalities: ["image", "text"],
-        }),
-      });
-      const data = await r.json();
-      const url = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+      const cleanPrompt = encodeURIComponent(String(prompt || "imagen creativa"));
+      const url = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&seed=${Date.now()}`;
       return new Response(JSON.stringify({ imageUrl: url }), {
         headers: { ...corsHeaders, "content-type": "application/json" },
       });
@@ -126,17 +117,10 @@ Deno.serve(async (req) => {
 
     // Analyze project across notes
     if (mode === "analyze-project") {
-      const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { authorization: `Bearer ${LOVABLE_API_KEY}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          model: "openai/gpt-5-mini",
-          messages: [
-            { role: "system", content: "Eres Orión, analista de proyectos indie. Analiza las notas y detecta: tareas abandonadas, sistemas incompletos, scope creep, contradicciones, prioridades rotas. Sé directo, claro, en español, con bullets y emojis. Da consejos accionables y personalizados." },
-            { role: "user", content: `Notas del proyecto:\n\n${(notes || []).map((n: any) => `### [${n.status}] ${n.category || "?"} — ${n.title}\n${n.content}\n(Última actividad: ${n.last_activity})`).join("\n\n")}` },
-          ],
-        }),
-      });
+      const r = await freeAI([
+        { role: "system", content: "Eres Orión, analista de proyectos indie. Analiza las notas y detecta: tareas abandonadas, sistemas incompletos, scope creep, contradicciones, prioridades rotas. Sé directo, claro, en español, con bullets y emojis. Da consejos accionables y personalizados." },
+        { role: "user", content: `Notas del proyecto:\n\n${(notes || []).map((n: any) => `### [${n.status}] ${n.category || "?"} — ${n.title}\n${n.content}\n(Última actividad: ${n.last_activity})`).join("\n\n")}` },
+      ]);
       const d = await r.json();
       return new Response(JSON.stringify({ analysis: d.choices?.[0]?.message?.content || "" }), { headers: { ...corsHeaders, "content-type": "application/json" } });
     }
@@ -162,15 +146,7 @@ Deno.serve(async (req) => {
 
     const systemPrompt = `${cfg.context || ""}\n\nPersonalidad: ${cfg.personality || ""}\n\nComportamiento: ${cfg.behavior || ""}${kbText}${refText}${memText}${notesText}\n\nUsa el contexto personal y las notas para personalizar tus respuestas. Cuando sea relevante, haz referencia a lo que sabes del usuario y su proyecto.`;
 
-    const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { authorization: `Bearer ${LOVABLE_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [{ role: "system", content: systemPrompt }, ...(messages || [])],
-        stream: true,
-      }),
-    });
+    const r = await freeAI([{ role: "system", content: systemPrompt }, ...(messages || [])], true);
 
     if (!r.ok) {
       const t = await r.text();
