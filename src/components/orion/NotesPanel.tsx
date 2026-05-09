@@ -58,6 +58,39 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
   const [classifying, setClassifying] = useState(false);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+
+  function insertMd(prefix: string, opts: { block?: boolean; wrap?: string } = {}) {
+    if (!active) return;
+    const ta = editorRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const value = active.content;
+    const selected = value.slice(start, end);
+    let insertion = "";
+    let cursorOffset = 0;
+    if (opts.wrap) {
+      insertion = `${opts.wrap}${selected || "código"}${opts.wrap}`;
+      cursorOffset = insertion.length;
+    } else if (opts.block) {
+      const lines = (selected || "texto").split("\n");
+      insertion = lines.map((l) => `${prefix}${l}`).join("\n");
+      cursorOffset = insertion.length;
+    } else {
+      const before = value.slice(0, start);
+      const needsNl = before.length > 0 && !before.endsWith("\n");
+      insertion = `${needsNl ? "\n" : ""}${prefix}${selected || ""}`;
+      cursorOffset = insertion.length;
+    }
+    const next = value.slice(0, start) + insertion + value.slice(end);
+    setActive({ ...active, content: next });
+    requestAnimationFrame(() => {
+      ta.focus();
+      const pos = start + cursorOffset;
+      ta.setSelectionRange(pos, pos);
+    });
+  }
 
   async function load() {
     const did = getDeviceId();
