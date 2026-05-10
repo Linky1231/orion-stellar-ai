@@ -284,10 +284,11 @@ export function ChatApp() {
                 ))}
               </div>
             )}
-            {(imageMode || searchMode) && (
-              <div className="mb-2 flex gap-2">
-                {imageMode && <Tag color="primary" onClose={() => setImageMode(false)}>🎨 Modo imagen</Tag>}
-                {searchMode && <Tag color="primary" onClose={() => setSearchMode(false)}>🔍 Buscar info</Tag>}
+            {(imageMode || searchMode || debugMode) && (
+              <div className="mb-2 flex gap-2 flex-wrap">
+                {imageMode && <Tag onClose={() => setImageMode(false)}>🎨 Modo imagen</Tag>}
+                {searchMode && <Tag onClose={() => setSearchMode(false)}>🔍 Buscar info</Tag>}
+                {debugMode && <Tag onClose={() => setDebugMode(false)}>🐞 Modo debug visual</Tag>}
               </div>
             )}
             <div className="glass-strong rounded-2xl border border-border shadow-soft p-2 flex items-end gap-1">
@@ -295,19 +296,24 @@ export function ChatApp() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                placeholder={imageMode ? "Describe la imagen…" : "Escribe un mensaje…"}
+                placeholder={imageMode ? "Describe la imagen…" : debugMode ? "Adjunta una captura de tu juego…" : "Escribe un mensaje…"}
                 rows={1}
                 className="flex-1 bg-transparent outline-none resize-none px-3 py-2 text-sm max-h-40"
               />
-              <label className="tap p-2 rounded-lg hover:bg-accent cursor-pointer" title="Adjuntar archivo">
-                <Paperclip className="w-4 h-4" />
-                <input type="file" hidden onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
-              </label>
-              <button onClick={() => { sfx.tap(); setImageMode((v) => !v); }} className={`tap p-2 rounded-lg ${imageMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Generar imagen">
+              {debugMode && (
+                <label className="tap p-2 rounded-lg hover:bg-accent cursor-pointer" title="Adjuntar captura">
+                  <Paperclip className="w-4 h-4" />
+                  <input type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+                </label>
+              )}
+              <button onClick={() => { sfx.tap(); setImageMode((v) => !v); if (!imageMode) { setDebugMode(false); setSearchMode(false); } }} className={`tap p-2 rounded-lg ${imageMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Generar imagen">
                 <ImagePlus className="w-4 h-4" />
               </button>
-              <button onClick={() => { sfx.tap(); setSearchMode((v) => !v); }} className={`tap p-2 rounded-lg ${searchMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Buscar info">
+              <button onClick={() => { sfx.tap(); setSearchMode((v) => !v); if (!searchMode) { setDebugMode(false); setImageMode(false); } }} className={`tap p-2 rounded-lg ${searchMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Buscar info">
                 <Search className="w-4 h-4" />
+              </button>
+              <button onClick={() => { sfx.tap(); setDebugMode((v) => !v); if (!debugMode) { setImageMode(false); setSearchMode(false); } }} className={`tap p-2 rounded-lg ${debugMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Modo debug visual">
+                <Bug className="w-4 h-4" />
               </button>
               <button onClick={send} disabled={streaming} className="tap p-2 rounded-lg gradient-orion text-primary-foreground disabled:opacity-50 shadow-glow" title="Enviar">
                 <Send className="w-4 h-4" />
