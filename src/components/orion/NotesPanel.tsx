@@ -68,8 +68,9 @@ type FolderRow = {
 };
 
 const SECTIONS = [
-  { id: "main", label: "Notas principales", icon: "📒" },
-  { id: "dev", label: "Notas de desarrollo", icon: "🛠️" },
+  { id: "main", label: "Notas", icon: "📒" },
+  { id: "dev", label: "Desarrollo", icon: "🛠️" },
+  { id: "debug", label: "Debug visual", icon: "🐞" },
 ];
 
 const STATUS = {
