@@ -81,13 +81,18 @@ async function sb(path: string, init: RequestInit = {}) {
   });
 }
 
+async function safeJson(r: Response) {
+  const text = await r.text();
+  try { return JSON.parse(text); } catch { return null; }
+}
+
 async function aiJSON(messages: any[], schema: any, name: string, _model = FREE_TEXT_MODEL) {
   const r = await freeAI([
     { role: "system", content: `Devuelve únicamente JSON válido para la función ${name}, sin markdown ni explicación. Esquema esperado: ${JSON.stringify(schema)}` },
     ...messages,
   ], false, true);
-  const d = await r.json();
-  const content = d.choices?.[0]?.message?.content || "{}";
+  const d = await safeJson(r);
+  const content = d?.choices?.[0]?.message?.content || "{}";
   try { return JSON.parse(content); } catch { return extractJsonObject(content); }
 }
 
