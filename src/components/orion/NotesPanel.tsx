@@ -1,13 +1,49 @@
 import { useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
-import { classifyNote, analyzeProject } from "@/lib/orion-api";
+import { classifyNote, analyzeProject, uploadAttachment, streamChat } from "@/lib/orion-api";
 import { OrionLogo } from "./OrionLogo";
 import {
   X, Plus, Trash2, Save, Folder, FolderPlus, Sparkles, Brain,
-  ArrowLeft, Wand2, Loader2,
+  ArrowLeft, Wand2, Loader2, Bug, Upload, ImageIcon,
 } from "lucide-react";
+
+const DEBUG_PROMPT = `Estás en MODO DEBUG VISUAL. El usuario ha enviado una captura de su videojuego indie en desarrollo. Analízala con precisión profesional como directora de arte + UX lead de estudio AAA.
+
+Detecta problemas reales y concretos visibles en la imagen, dentro de estas categorías (solo menciona las que apliquen):
+
+1. UI/UX: tamaño de texto, contraste, alineación, márgenes, HUD saturado, jerarquía, fuentes, feedback visual, iconos confusos.
+2. Gameplay visual: impacto de ataques, legibilidad de enemigos, partículas, animaciones, feedback de daño, cámara, visibilidad de objetivos.
+3. Pulido: sensación de prototipo, consistencia de assets, transiciones, polish, espaciado, armonía de color.
+4. Arte / Dirección visual: mezcla de estilos, saturación, iluminación, composición, silueta, escala, ruido visual.
+5. Rendimiento aparente: exceso de efectos, sombras, partículas, carga visual.
+6. Diseño de niveles: claridad de caminos, puntos de referencia, distribución espacial.
+7. Combate: claridad de golpes, hitboxes, telegraphing, satisfacción de impacto.
+8. Menús: organización, jerarquía, tamaño de botones, exceso de texto.
+9. Experiencia del jugador: onboarding, claridad de objetivos, intuitividad.
+10. Profesionalismo: branding, identidad, placeholders visibles, coherencia.
+
+FORMATO OBLIGATORIO (markdown):
+
+# Diagnóstico visual
+1-2 frases describiendo qué se ve y la sensación general.
+
+# Problemas detectados
+Lista priorizada (máximo 6). Cada item:
+- **[Categoría] Problema concreto** — qué falla y por qué afecta al jugador.
+
+# Cómo arreglarlo
+Para cada problema, una solución accionable y específica con sugerencias técnicas (contraste >4.5:1, hit-stop 80ms, reducir partículas, outline, etc.).
+
+# Veredicto
+Una línea: profesional / semi-pulido / prototipo + el cambio #1 que más subiría la calidad percibida.
+
+REGLAS:
+- Directo, técnico, honesto. Nunca complaciente.
+- No inventes problemas que no se ven.
+- Si no es un videojuego, dilo y pide otra captura.`;
 
 
 type Note = {
@@ -32,8 +68,9 @@ type FolderRow = {
 };
 
 const SECTIONS = [
-  { id: "main", label: "Notas principales", icon: "📒" },
-  { id: "dev", label: "Notas de desarrollo", icon: "🛠️" },
+  { id: "main", label: "Notas", icon: "📒" },
+  { id: "dev", label: "Desarrollo", icon: "🛠️" },
+  { id: "debug", label: "Debug visual", icon: "🐞" },
 ];
 
 const STATUS = {
@@ -51,12 +88,52 @@ const CATEGORY_EMOJI: Record<string, string> = {
 export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [folders, setFolders] = useState<FolderRow[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
-  const [section, setSection] = useState<"main" | "dev">("main");
+  const [section, setSection] = useState<"main" | "dev" | "debug">("main");
   const [activeFolder, setActiveFolder] = useState<FolderRow | null>(null);
   const [active, setActive] = useState<Note | null>(null);
   const [classifying, setClassifying] = useState(false);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  // Debug visual state
+  const [debugImage, setDebugImage] = useState<string | null>(null);
+  const [debugUploading, setDebugUploading] = useState(false);
+  const [debugAnalyzing, setDebugAnalyzing] = useState(false);
+  const [debugResult, setDebugResult] = useState<string>("");
+  const [debugNotes, setDebugNotes] = useState("");
+
+  async function handleDebugUpload(file: File) {
+    setDebugUploading(true);
+    setDebugResult("");
+    try {
+      const url = await uploadAttachment(file);
+      setDebugImage(url);
+      sfx.tap();
+    } catch (e: any) { sfx.error(); alert("Error subiendo imagen: " + e.message); }
+    setDebugUploading(false);
+  }
+
+  async function runDebugAnalysis() {
+    if (!debugImage) return;
+    setDebugAnalyzing(true);
+    setDebugResult("");
+    sfx.send();
+    try {
+      let acc = "";
+      await streamChat([{
+        role: "user",
+        content: [
+          { type: "text", text: DEBUG_PROMPT + (debugNotes ? `\n\nContexto extra del dev: ${debugNotes}` : "") },
+          { type: "image_url", image_url: { url: debugImage } },
+        ] as any,
+      }], (delta) => { acc += delta; setDebugResult(acc); });
+      sfx.receive();
+    } catch (e: any) {
+      sfx.error();
+      setDebugResult("⚠️ " + e.message);
+    }
+    setDebugAnalyzing(false);
+  }
+
   async function load() {
     const did = getDeviceId();
     const [f, n] = await Promise.all([
@@ -197,6 +274,22 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
         ))}
       </div>
 
+      {section === "debug" ? (
+        <div className="flex-1 overflow-y-auto">
+          <DebugVisualPanel
+            image={debugImage}
+            setImage={setDebugImage}
+            uploading={debugUploading}
+            analyzing={debugAnalyzing}
+            result={debugResult}
+            notes={debugNotes}
+            setNotes={setDebugNotes}
+            onUpload={handleDebugUpload}
+            onAnalyze={runDebugAnalysis}
+            onReset={() => { setDebugImage(null); setDebugResult(""); setDebugNotes(""); }}
+          />
+        </div>
+      ) : (
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar: folders + notes — hidden on mobile when a note or analysis is open */}
         <aside className={`${(active || analysis !== null) ? "hidden md:flex" : "flex"} w-full md:w-80 border-r border-border flex-col`}>
@@ -372,6 +465,116 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
           )}
         </section>
       </div>
+      )}
+    </div>
+  );
+}
+
+function DebugVisualPanel({
+  image, uploading, analyzing, result, notes, setNotes,
+  onUpload, onAnalyze, onReset,
+}: {
+  image: string | null;
+  setImage: (v: string | null) => void;
+  uploading: boolean;
+  analyzing: boolean;
+  result: string;
+  notes: string;
+  setNotes: (v: string) => void;
+  onUpload: (f: File) => void;
+  onAnalyze: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-4">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl gradient-orion flex items-center justify-center shrink-0 shadow-glow">
+          <Bug className="w-5 h-5 text-primary-foreground" />
+        </div>
+        <div className="flex-1">
+          <div className="font-semibold tracking-tight">Debug visual de tu juego</div>
+          <div className="text-xs text-muted-foreground">
+            Sube una captura y Orión detectará errores de UI/UX, pulido, arte, combate, menús y profesionalismo.
+          </div>
+        </div>
+      </div>
+
+      {!image ? (
+        <label className="block cursor-pointer">
+          <input
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])}
+          />
+          <div className="border-2 border-dashed border-border rounded-2xl p-8 text-center hover:border-primary hover:bg-accent/30 transition">
+            {uploading ? (
+              <div className="flex flex-col items-center gap-2 text-sm">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                Subiendo captura…
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <Upload className="w-8 h-8 text-primary" />
+                <div className="font-medium text-sm">Sube una captura de tu juego</div>
+                <div className="text-xs text-muted-foreground">PNG / JPG · cuanto más nítida, mejor el análisis</div>
+              </div>
+            )}
+          </div>
+        </label>
+      ) : (
+        <div className="space-y-3">
+          <div className="relative rounded-2xl overflow-hidden border border-border bg-card">
+            <img src={image} alt="Captura del juego" className="w-full max-h-[60vh] object-contain bg-black/30" />
+            <button
+              onClick={onReset}
+              className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 backdrop-blur hover:bg-background"
+              title="Quitar imagen"
+            ><X className="w-4 h-4" /></button>
+          </div>
+
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Contexto opcional: género, plataforma, qué quieres mejorar…"
+            rows={2}
+            className="w-full bg-card border border-border rounded-xl p-3 text-sm outline-none resize-none focus:border-primary"
+          />
+
+          <div className="flex gap-2">
+            <button
+              onClick={onAnalyze}
+              disabled={analyzing}
+              className="tap flex-1 px-4 py-2.5 rounded-xl gradient-orion text-primary-foreground font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50 shadow-glow"
+            >
+              {analyzing ? <><Loader2 className="w-4 h-4 animate-spin" /> Analizando…</> : <><Bug className="w-4 h-4" /> Analizar captura</>}
+            </button>
+            <label className="tap px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm flex items-center gap-2 cursor-pointer">
+              <ImageIcon className="w-4 h-4" />
+              Cambiar
+              <input type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
+            </label>
+          </div>
+        </div>
+      )}
+
+      {(result || analyzing) && (
+        <div className="glass-strong rounded-2xl p-5 border border-border">
+          <div className="flex items-center gap-2 mb-3">
+            <OrionLogo size={28} glow={analyzing} />
+            <div className="font-semibold text-sm">Análisis de Orión</div>
+          </div>
+          {result ? (
+            <div className="text-sm leading-relaxed whitespace-pre-wrap prose prose-sm max-w-none dark:prose-invert">
+              <ReactMarkdown>{result}</ReactMarkdown>
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Orión está analizando la captura…
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
