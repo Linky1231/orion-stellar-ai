@@ -274,6 +274,22 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
         ))}
       </div>
 
+      {section === "debug" ? (
+        <div className="flex-1 overflow-y-auto">
+          <DebugVisualPanel
+            image={debugImage}
+            setImage={setDebugImage}
+            uploading={debugUploading}
+            analyzing={debugAnalyzing}
+            result={debugResult}
+            notes={debugNotes}
+            setNotes={setDebugNotes}
+            onUpload={handleDebugUpload}
+            onAnalyze={runDebugAnalysis}
+            onReset={() => { setDebugImage(null); setDebugResult(""); setDebugNotes(""); }}
+          />
+        </div>
+      ) : (
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar: folders + notes — hidden on mobile when a note or analysis is open */}
         <aside className={`${(active || analysis !== null) ? "hidden md:flex" : "flex"} w-full md:w-80 border-r border-border flex-col`}>
