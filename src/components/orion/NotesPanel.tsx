@@ -465,6 +465,116 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
           )}
         </section>
       </div>
+      )}
+    </div>
+  );
+}
+
+function DebugVisualPanel({
+  image, uploading, analyzing, result, notes, setNotes,
+  onUpload, onAnalyze, onReset,
+}: {
+  image: string | null;
+  setImage: (v: string | null) => void;
+  uploading: boolean;
+  analyzing: boolean;
+  result: string;
+  notes: string;
+  setNotes: (v: string) => void;
+  onUpload: (f: File) => void;
+  onAnalyze: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-4">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl gradient-orion flex items-center justify-center shrink-0 shadow-glow">
+          <Bug className="w-5 h-5 text-primary-foreground" />
+        </div>
+        <div className="flex-1">
+          <div className="font-semibold tracking-tight">Debug visual de tu juego</div>
+          <div className="text-xs text-muted-foreground">
+            Sube una captura y Orión detectará errores de UI/UX, pulido, arte, combate, menús y profesionalismo.
+          </div>
+        </div>
+      </div>
+
+      {!image ? (
+        <label className="block cursor-pointer">
+          <input
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])}
+          />
+          <div className="border-2 border-dashed border-border rounded-2xl p-8 text-center hover:border-primary hover:bg-accent/30 transition">
+            {uploading ? (
+              <div className="flex flex-col items-center gap-2 text-sm">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                Subiendo captura…
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <Upload className="w-8 h-8 text-primary" />
+                <div className="font-medium text-sm">Sube una captura de tu juego</div>
+                <div className="text-xs text-muted-foreground">PNG / JPG · cuanto más nítida, mejor el análisis</div>
+              </div>
+            )}
+          </div>
+        </label>
+      ) : (
+        <div className="space-y-3">
+          <div className="relative rounded-2xl overflow-hidden border border-border bg-card">
+            <img src={image} alt="Captura del juego" className="w-full max-h-[60vh] object-contain bg-black/30" />
+            <button
+              onClick={onReset}
+              className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 backdrop-blur hover:bg-background"
+              title="Quitar imagen"
+            ><X className="w-4 h-4" /></button>
+          </div>
+
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Contexto opcional: género, plataforma, qué quieres mejorar…"
+            rows={2}
+            className="w-full bg-card border border-border rounded-xl p-3 text-sm outline-none resize-none focus:border-primary"
+          />
+
+          <div className="flex gap-2">
+            <button
+              onClick={onAnalyze}
+              disabled={analyzing}
+              className="tap flex-1 px-4 py-2.5 rounded-xl gradient-orion text-primary-foreground font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50 shadow-glow"
+            >
+              {analyzing ? <><Loader2 className="w-4 h-4 animate-spin" /> Analizando…</> : <><Bug className="w-4 h-4" /> Analizar captura</>}
+            </button>
+            <label className="tap px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm flex items-center gap-2 cursor-pointer">
+              <ImageIcon className="w-4 h-4" />
+              Cambiar
+              <input type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
+            </label>
+          </div>
+        </div>
+      )}
+
+      {(result || analyzing) && (
+        <div className="glass-strong rounded-2xl p-5 border border-border">
+          <div className="flex items-center gap-2 mb-3">
+            <OrionLogo size={28} glow={analyzing} />
+            <div className="font-semibold text-sm">Análisis de Orión</div>
+          </div>
+          {result ? (
+            <div className="text-sm leading-relaxed whitespace-pre-wrap prose prose-sm max-w-none dark:prose-invert">
+              <ReactMarkdown>{result}</ReactMarkdown>
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Orión está analizando la captura…
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
