@@ -88,12 +88,52 @@ const CATEGORY_EMOJI: Record<string, string> = {
 export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [folders, setFolders] = useState<FolderRow[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
-  const [section, setSection] = useState<"main" | "dev">("main");
+  const [section, setSection] = useState<"main" | "dev" | "debug">("main");
   const [activeFolder, setActiveFolder] = useState<FolderRow | null>(null);
   const [active, setActive] = useState<Note | null>(null);
   const [classifying, setClassifying] = useState(false);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  // Debug visual state
+  const [debugImage, setDebugImage] = useState<string | null>(null);
+  const [debugUploading, setDebugUploading] = useState(false);
+  const [debugAnalyzing, setDebugAnalyzing] = useState(false);
+  const [debugResult, setDebugResult] = useState<string>("");
+  const [debugNotes, setDebugNotes] = useState("");
+
+  async function handleDebugUpload(file: File) {
+    setDebugUploading(true);
+    setDebugResult("");
+    try {
+      const url = await uploadAttachment(file);
+      setDebugImage(url);
+      sfx.tap();
+    } catch (e: any) { sfx.error(); alert("Error subiendo imagen: " + e.message); }
+    setDebugUploading(false);
+  }
+
+  async function runDebugAnalysis() {
+    if (!debugImage) return;
+    setDebugAnalyzing(true);
+    setDebugResult("");
+    sfx.send();
+    try {
+      let acc = "";
+      await streamChat([{
+        role: "user",
+        content: [
+          { type: "text", text: DEBUG_PROMPT + (debugNotes ? `\n\nContexto extra del dev: ${debugNotes}` : "") },
+          { type: "image_url", image_url: { url: debugImage } },
+        ] as any,
+      }], (delta) => { acc += delta; setDebugResult(acc); });
+      sfx.receive();
+    } catch (e: any) {
+      sfx.error();
+      setDebugResult("⚠️ " + e.message);
+    }
+    setDebugAnalyzing(false);
+  }
+
   async function load() {
     const did = getDeviceId();
     const [f, n] = await Promise.all([
