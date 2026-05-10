@@ -192,8 +192,12 @@ REGLAS ESTRICTAS:
 ESTILO: inteligente, elegante, analítico, preciso, profesional, directo. Nunca infantil, emocional ni complaciente. Siéntete como una productora AI especializada en videojuegos indie.` },
         { role: "user", content: `Notas del proyecto:\n\n${(notes || []).map((n: any) => `### [${n.status}] ${n.category || "?"} — ${n.title}\n${n.content}\n(Última actividad: ${n.last_activity})`).join("\n\n")}` },
       ]);
-      const d = await r.json();
-      return new Response(JSON.stringify({ analysis: d.choices?.[0]?.message?.content || "" }), { headers: { ...corsHeaders, "content-type": "application/json" } });
+      if (!r.ok) {
+        const t = await r.text();
+        return new Response(JSON.stringify({ analysis: "", error: `AI ${r.status}: ${t.slice(0, 200)}` }), { headers: { ...corsHeaders, "content-type": "application/json" } });
+      }
+      const d = await safeJson(r);
+      return new Response(JSON.stringify({ analysis: d?.choices?.[0]?.message?.content || "" }), { headers: { ...corsHeaders, "content-type": "application/json" } });
     }
 
     // CHAT mode — load config, knowledge, refs, AND personal context
