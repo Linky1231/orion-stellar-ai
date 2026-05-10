@@ -1,13 +1,49 @@
 import { useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
-import { classifyNote, analyzeProject } from "@/lib/orion-api";
+import { classifyNote, analyzeProject, uploadAttachment, streamChat } from "@/lib/orion-api";
 import { OrionLogo } from "./OrionLogo";
 import {
   X, Plus, Trash2, Save, Folder, FolderPlus, Sparkles, Brain,
-  ArrowLeft, Wand2, Loader2,
+  ArrowLeft, Wand2, Loader2, Bug, Upload, ImageIcon,
 } from "lucide-react";
+
+const DEBUG_PROMPT = `Estás en MODO DEBUG VISUAL. El usuario ha enviado una captura de su videojuego indie en desarrollo. Analízala con precisión profesional como directora de arte + UX lead de estudio AAA.
+
+Detecta problemas reales y concretos visibles en la imagen, dentro de estas categorías (solo menciona las que apliquen):
+
+1. UI/UX: tamaño de texto, contraste, alineación, márgenes, HUD saturado, jerarquía, fuentes, feedback visual, iconos confusos.
+2. Gameplay visual: impacto de ataques, legibilidad de enemigos, partículas, animaciones, feedback de daño, cámara, visibilidad de objetivos.
+3. Pulido: sensación de prototipo, consistencia de assets, transiciones, polish, espaciado, armonía de color.
+4. Arte / Dirección visual: mezcla de estilos, saturación, iluminación, composición, silueta, escala, ruido visual.
+5. Rendimiento aparente: exceso de efectos, sombras, partículas, carga visual.
+6. Diseño de niveles: claridad de caminos, puntos de referencia, distribución espacial.
+7. Combate: claridad de golpes, hitboxes, telegraphing, satisfacción de impacto.
+8. Menús: organización, jerarquía, tamaño de botones, exceso de texto.
+9. Experiencia del jugador: onboarding, claridad de objetivos, intuitividad.
+10. Profesionalismo: branding, identidad, placeholders visibles, coherencia.
+
+FORMATO OBLIGATORIO (markdown):
+
+# Diagnóstico visual
+1-2 frases describiendo qué se ve y la sensación general.
+
+# Problemas detectados
+Lista priorizada (máximo 6). Cada item:
+- **[Categoría] Problema concreto** — qué falla y por qué afecta al jugador.
+
+# Cómo arreglarlo
+Para cada problema, una solución accionable y específica con sugerencias técnicas (contraste >4.5:1, hit-stop 80ms, reducir partículas, outline, etc.).
+
+# Veredicto
+Una línea: profesional / semi-pulido / prototipo + el cambio #1 que más subiría la calidad percibida.
+
+REGLAS:
+- Directo, técnico, honesto. Nunca complaciente.
+- No inventes problemas que no se ven.
+- Si no es un videojuego, dilo y pide otra captura.`;
 
 
 type Note = {
