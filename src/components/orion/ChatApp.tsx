@@ -192,6 +192,7 @@ export function ChatApp() {
     }
     setStreaming(false);
     setSearchMode(false);
+    setDebugMode(false);
   }
 
   async function onFile(f: File) {
