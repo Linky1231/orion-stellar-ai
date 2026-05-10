@@ -151,18 +151,21 @@ export function ChatApp() {
     }
 
     // Build chat history for AI (with multimodal content)
+    const savedId = (saved as any)?.id;
     const history: ChatMsg[] = messages.concat(saved ? [saved as DBMsg] : []).map((m) => {
       const imgs = (m.attachments || []).filter((a: any) => a.type?.startsWith("image"));
+      const isLatest = m.id === savedId;
+      const debugPrefix = debugMode && isLatest ? DEBUG_PROMPT + "\n\n" : "";
       if (m.role === "user" && imgs.length) {
         return {
           role: "user",
           content: [
-            { type: "text", text: (searchMode ? "[Buscar info actualizada en internet] " : "") + m.content },
+            { type: "text", text: debugPrefix + (searchMode ? "[Buscar info actualizada en internet] " : "") + m.content },
             ...imgs.map((a: any) => ({ type: "image_url", image_url: { url: a.url } })),
           ] as any,
         };
       }
-      return { role: m.role as any, content: m.content + (searchMode && m.role === "user" ? " [Si necesitas info actualizada, indícalo claramente]" : "") };
+      return { role: m.role as any, content: debugPrefix + m.content + (searchMode && m.role === "user" ? " [Si necesitas info actualizada, indícalo claramente]" : "") };
     });
 
     // Stream assistant
