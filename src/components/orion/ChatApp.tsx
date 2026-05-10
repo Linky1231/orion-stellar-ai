@@ -8,7 +8,46 @@ import { OrionLogo } from "./OrionLogo";
 import { Sidebar } from "./Sidebar";
 import { NotesPanel } from "./NotesPanel";
 import { AdminPanel } from "./AdminPanel";
-import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X } from "lucide-react";
+import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X, Bug } from "lucide-react";
+
+const DEBUG_PROMPT = `Estás en MODO DEBUG VISUAL. El usuario te ha enviado una imagen (screenshot/captura) de su videojuego indie en desarrollo. Analízala con TOTAL CLARIDAD y precisión profesional como si fueras una directora de arte + UX lead de estudio AAA revisando un build.
+
+Tu análisis debe detectar problemas reales y concretos visibles en la imagen, dentro de estas categorías (solo menciona las que apliquen, no listes todas):
+
+1. UI/UX: tamaño de texto, contraste, alineación, márgenes, HUD saturado, jerarquía, fuentes, feedback visual, iconos confusos.
+2. Gameplay visual: impacto de ataques, legibilidad de enemigos, partículas, animaciones, feedback de daño, cámara, visibilidad de objetivos.
+3. Pulido: sensación de prototipo, consistencia de assets, transiciones, polish, espaciado, armonía de color.
+4. Arte / Dirección visual: mezcla de estilos, saturación, iluminación, composición, silueta de personajes, escala, ruido visual.
+5. Rendimiento aparente: exceso de efectos, sombras, partículas, carga visual, posible caída de FPS.
+6. Diseño de niveles: claridad de caminos, puntos de referencia, distribución espacial, decoración excesiva.
+7. Combate: claridad de golpes, hitboxes, telegraphing, cooldowns, satisfacción de impacto.
+8. Menús: organización, jerarquía, tamaño de botones, exceso de texto.
+9. Experiencia del jugador: onboarding, claridad de objetivos, dirección visual, intuitividad.
+10. Profesionalismo: branding, identidad, placeholders visibles, coherencia, presentación.
+
+FORMATO DE RESPUESTA OBLIGATORIO (markdown):
+
+# Diagnóstico visual
+1-2 frases describiendo qué se ve y la sensación general.
+
+# Problemas detectados
+Lista priorizada (máximo 6). Cada item:
+- **[Categoría] Problema concreto** — qué falla exactamente y por qué afecta al jugador.
+
+# Cómo arreglarlo
+Para cada problema anterior, una solución accionable y específica (no genérica). Incluye sugerencias técnicas cuando aplique (ej: aumentar contraste a >4.5:1, añadir hit-stop de 80ms, reducir partículas a la mitad, usar outline/silueta, etc.).
+
+# Veredicto
+Una línea: ¿se ve profesional, semi-pulido o prototipo? + el cambio #1 que más subiría la calidad percibida.
+
+REGLAS ESTRICTAS:
+- Sé directo, técnico y honesto. Nunca complaciente.
+- NO inventes problemas que no se ven en la imagen.
+- NO uses lenguaje corporativo ni motivacional.
+- Si la imagen NO es de un videojuego, dilo y pide una captura del juego.
+- Si la imagen tiene poca resolución para juzgar algo, indícalo.
+
+Imagen del juego a analizar:`;
 
 const SpeechCtx = createContext<{ speakingId: string | null; toggle: (id: string, text: string) => void }>({ speakingId: null, toggle: () => {} });
 
@@ -30,6 +69,7 @@ export function ChatApp() {
   const [pending, setPending] = useState<{ url: string; type: string; name: string }[]>([]);
   const [imageMode, setImageMode] = useState(false);
   const [searchMode, setSearchMode] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }); }, [messages, streaming]);
@@ -111,18 +151,21 @@ export function ChatApp() {
     }
 
     // Build chat history for AI (with multimodal content)
+    const savedId = (saved as any)?.id;
     const history: ChatMsg[] = messages.concat(saved ? [saved as DBMsg] : []).map((m) => {
       const imgs = (m.attachments || []).filter((a: any) => a.type?.startsWith("image"));
+      const isLatest = m.id === savedId;
+      const debugPrefix = debugMode && isLatest ? DEBUG_PROMPT + "\n\n" : "";
       if (m.role === "user" && imgs.length) {
         return {
           role: "user",
           content: [
-            { type: "text", text: (searchMode ? "[Buscar info actualizada en internet] " : "") + m.content },
+            { type: "text", text: debugPrefix + (searchMode ? "[Buscar info actualizada en internet] " : "") + m.content },
             ...imgs.map((a: any) => ({ type: "image_url", image_url: { url: a.url } })),
           ] as any,
         };
       }
-      return { role: m.role as any, content: m.content + (searchMode && m.role === "user" ? " [Si necesitas info actualizada, indícalo claramente]" : "") };
+      return { role: m.role as any, content: debugPrefix + m.content + (searchMode && m.role === "user" ? " [Si necesitas info actualizada, indícalo claramente]" : "") };
     });
 
     // Stream assistant
@@ -149,6 +192,7 @@ export function ChatApp() {
     }
     setStreaming(false);
     setSearchMode(false);
+    setDebugMode(false);
   }
 
   async function onFile(f: File) {
@@ -240,10 +284,11 @@ export function ChatApp() {
                 ))}
               </div>
             )}
-            {(imageMode || searchMode) && (
-              <div className="mb-2 flex gap-2">
-                {imageMode && <Tag color="primary" onClose={() => setImageMode(false)}>🎨 Modo imagen</Tag>}
-                {searchMode && <Tag color="primary" onClose={() => setSearchMode(false)}>🔍 Buscar info</Tag>}
+            {(imageMode || searchMode || debugMode) && (
+              <div className="mb-2 flex gap-2 flex-wrap">
+                {imageMode && <Tag onClose={() => setImageMode(false)}>🎨 Modo imagen</Tag>}
+                {searchMode && <Tag onClose={() => setSearchMode(false)}>🔍 Buscar info</Tag>}
+                {debugMode && <Tag onClose={() => setDebugMode(false)}>🐞 Modo debug visual</Tag>}
               </div>
             )}
             <div className="glass-strong rounded-2xl border border-border shadow-soft p-2 flex items-end gap-1">
@@ -251,19 +296,24 @@ export function ChatApp() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                placeholder={imageMode ? "Describe la imagen…" : "Escribe un mensaje…"}
+                placeholder={imageMode ? "Describe la imagen…" : debugMode ? "Adjunta una captura de tu juego…" : "Escribe un mensaje…"}
                 rows={1}
                 className="flex-1 bg-transparent outline-none resize-none px-3 py-2 text-sm max-h-40"
               />
-              <label className="tap p-2 rounded-lg hover:bg-accent cursor-pointer" title="Adjuntar archivo">
-                <Paperclip className="w-4 h-4" />
-                <input type="file" hidden onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
-              </label>
-              <button onClick={() => { sfx.tap(); setImageMode((v) => !v); }} className={`tap p-2 rounded-lg ${imageMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Generar imagen">
+              {debugMode && (
+                <label className="tap p-2 rounded-lg hover:bg-accent cursor-pointer" title="Adjuntar captura">
+                  <Paperclip className="w-4 h-4" />
+                  <input type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+                </label>
+              )}
+              <button onClick={() => { sfx.tap(); setImageMode((v) => !v); if (!imageMode) { setDebugMode(false); setSearchMode(false); } }} className={`tap p-2 rounded-lg ${imageMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Generar imagen">
                 <ImagePlus className="w-4 h-4" />
               </button>
-              <button onClick={() => { sfx.tap(); setSearchMode((v) => !v); }} className={`tap p-2 rounded-lg ${searchMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Buscar info">
+              <button onClick={() => { sfx.tap(); setSearchMode((v) => !v); if (!searchMode) { setDebugMode(false); setImageMode(false); } }} className={`tap p-2 rounded-lg ${searchMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Buscar info">
                 <Search className="w-4 h-4" />
+              </button>
+              <button onClick={() => { sfx.tap(); setDebugMode((v) => !v); if (!debugMode) { setImageMode(false); setSearchMode(false); } }} className={`tap p-2 rounded-lg ${debugMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Modo debug visual">
+                <Bug className="w-4 h-4" />
               </button>
               <button onClick={send} disabled={streaming} className="tap p-2 rounded-lg gradient-orion text-primary-foreground disabled:opacity-50 shadow-glow" title="Enviar">
                 <Send className="w-4 h-4" />
