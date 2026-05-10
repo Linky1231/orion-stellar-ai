@@ -69,6 +69,7 @@ export function ChatApp() {
   const [pending, setPending] = useState<{ url: string; type: string; name: string }[]>([]);
   const [imageMode, setImageMode] = useState(false);
   const [searchMode, setSearchMode] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }); }, [messages, streaming]);
