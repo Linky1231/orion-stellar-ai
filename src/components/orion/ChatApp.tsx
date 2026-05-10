@@ -8,7 +8,46 @@ import { OrionLogo } from "./OrionLogo";
 import { Sidebar } from "./Sidebar";
 import { NotesPanel } from "./NotesPanel";
 import { AdminPanel } from "./AdminPanel";
-import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X } from "lucide-react";
+import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X, Bug } from "lucide-react";
+
+const DEBUG_PROMPT = `Estás en MODO DEBUG VISUAL. El usuario te ha enviado una imagen (screenshot/captura) de su videojuego indie en desarrollo. Analízala con TOTAL CLARIDAD y precisión profesional como si fueras una directora de arte + UX lead de estudio AAA revisando un build.
+
+Tu análisis debe detectar problemas reales y concretos visibles en la imagen, dentro de estas categorías (solo menciona las que apliquen, no listes todas):
+
+1. UI/UX: tamaño de texto, contraste, alineación, márgenes, HUD saturado, jerarquía, fuentes, feedback visual, iconos confusos.
+2. Gameplay visual: impacto de ataques, legibilidad de enemigos, partículas, animaciones, feedback de daño, cámara, visibilidad de objetivos.
+3. Pulido: sensación de prototipo, consistencia de assets, transiciones, polish, espaciado, armonía de color.
+4. Arte / Dirección visual: mezcla de estilos, saturación, iluminación, composición, silueta de personajes, escala, ruido visual.
+5. Rendimiento aparente: exceso de efectos, sombras, partículas, carga visual, posible caída de FPS.
+6. Diseño de niveles: claridad de caminos, puntos de referencia, distribución espacial, decoración excesiva.
+7. Combate: claridad de golpes, hitboxes, telegraphing, cooldowns, satisfacción de impacto.
+8. Menús: organización, jerarquía, tamaño de botones, exceso de texto.
+9. Experiencia del jugador: onboarding, claridad de objetivos, dirección visual, intuitividad.
+10. Profesionalismo: branding, identidad, placeholders visibles, coherencia, presentación.
+
+FORMATO DE RESPUESTA OBLIGATORIO (markdown):
+
+# Diagnóstico visual
+1-2 frases describiendo qué se ve y la sensación general.
+
+# Problemas detectados
+Lista priorizada (máximo 6). Cada item:
+- **[Categoría] Problema concreto** — qué falla exactamente y por qué afecta al jugador.
+
+# Cómo arreglarlo
+Para cada problema anterior, una solución accionable y específica (no genérica). Incluye sugerencias técnicas cuando aplique (ej: aumentar contraste a >4.5:1, añadir hit-stop de 80ms, reducir partículas a la mitad, usar outline/silueta, etc.).
+
+# Veredicto
+Una línea: ¿se ve profesional, semi-pulido o prototipo? + el cambio #1 que más subiría la calidad percibida.
+
+REGLAS ESTRICTAS:
+- Sé directo, técnico y honesto. Nunca complaciente.
+- NO inventes problemas que no se ven en la imagen.
+- NO uses lenguaje corporativo ni motivacional.
+- Si la imagen NO es de un videojuego, dilo y pide una captura del juego.
+- Si la imagen tiene poca resolución para juzgar algo, indícalo.
+
+Imagen del juego a analizar:`;
 
 const SpeechCtx = createContext<{ speakingId: string | null; toggle: (id: string, text: string) => void }>({ speakingId: null, toggle: () => {} });
 
