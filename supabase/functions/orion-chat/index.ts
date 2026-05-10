@@ -81,13 +81,18 @@ async function sb(path: string, init: RequestInit = {}) {
   });
 }
 
+async function safeJson(r: Response) {
+  const text = await r.text();
+  try { return JSON.parse(text); } catch { return null; }
+}
+
 async function aiJSON(messages: any[], schema: any, name: string, _model = FREE_TEXT_MODEL) {
   const r = await freeAI([
     { role: "system", content: `Devuelve únicamente JSON válido para la función ${name}, sin markdown ni explicación. Esquema esperado: ${JSON.stringify(schema)}` },
     ...messages,
   ], false, true);
-  const d = await r.json();
-  const content = d.choices?.[0]?.message?.content || "{}";
+  const d = await safeJson(r);
+  const content = d?.choices?.[0]?.message?.content || "{}";
   try { return JSON.parse(content); } catch { return extractJsonObject(content); }
 }
 
@@ -187,8 +192,12 @@ REGLAS ESTRICTAS:
 ESTILO: inteligente, elegante, analítico, preciso, profesional, directo. Nunca infantil, emocional ni complaciente. Siéntete como una productora AI especializada en videojuegos indie.` },
         { role: "user", content: `Notas del proyecto:\n\n${(notes || []).map((n: any) => `### [${n.status}] ${n.category || "?"} — ${n.title}\n${n.content}\n(Última actividad: ${n.last_activity})`).join("\n\n")}` },
       ]);
-      const d = await r.json();
-      return new Response(JSON.stringify({ analysis: d.choices?.[0]?.message?.content || "" }), { headers: { ...corsHeaders, "content-type": "application/json" } });
+      if (!r.ok) {
+        const t = await r.text();
+        return new Response(JSON.stringify({ analysis: "", error: `AI ${r.status}: ${t.slice(0, 200)}` }), { headers: { ...corsHeaders, "content-type": "application/json" } });
+      }
+      const d = await safeJson(r);
+      return new Response(JSON.stringify({ analysis: d?.choices?.[0]?.message?.content || "" }), { headers: { ...corsHeaders, "content-type": "application/json" } });
     }
 
     // CHAT mode — load config, knowledge, refs, AND personal context
