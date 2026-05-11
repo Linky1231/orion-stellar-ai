@@ -143,10 +143,19 @@
     transition: transform 0.15s var(--transition-smooth), opacity 0.15s var(--transition-smooth), box-shadow 0.2s var(--transition-smooth);
   }
   .tap:active { transform: scale(0.96); opacity: 0.9; }
+  .transition-smooth { transition: all 0.25s var(--transition-smooth); }
 }
 
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.992); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes soft-rise {
+  from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes pulse-glow {
@@ -154,6 +163,8 @@
   50% { box-shadow: 0 0 0 12px oklch(0.58 0.22 280 / 0); }
 }
 .animate-fade-up { animation: fade-up 0.35s var(--transition-smooth) both; }
+.animate-panel-in { animation: panel-in 0.28s var(--transition-smooth) both; }
+.animate-soft-rise { animation: soft-rise 0.42s var(--transition-smooth) both; }
 .animate-pulse-glow { animation: pulse-glow 2s ease-out infinite; }
 
 /* Custom scrollbar */

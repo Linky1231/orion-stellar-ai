@@ -3,10 +3,11 @@ import ReactMarkdown from "react-markdown";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
-import { streamChat, generateImage, uploadAttachment, extractAndStoreMemory, type ChatMsg } from "@/lib/orion-api";
+import { streamChat, streamSearch, generateImage, uploadAttachment, extractAndStoreMemory, type ChatMsg } from "@/lib/orion-api";
 import { OrionLogo } from "./OrionLogo";
 import { Sidebar } from "./Sidebar";
 import { NotesPanel } from "./NotesPanel";
+import { DebugPanel } from "./DebugPanel";
 import { AdminPanel } from "./AdminPanel";
 import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X } from "lucide-react";
 
@@ -22,6 +23,7 @@ const ADMIN_TOKEN = "Admin7880";
 export function ChatApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [debugOpen, setDebugOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [convId, setConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DBMsg[]>([]);
@@ -91,6 +93,8 @@ export function ChatApp() {
     // Image generation mode
     if (imageMode) {
       setStreaming(true);
+      const tempId = "img-" + Date.now();
+      setMessages((m) => [...m, { id: tempId, conversation_id: id, role: "assistant", content: "Preparando imagen…", attachments: [], created_at: new Date().toISOString() }]);
       try {
         const url = await generateImage(text);
         const { data: a } = await supabase.from("messages").insert({
@@ -98,11 +102,11 @@ export function ChatApp() {
           content: `Aquí tienes tu imagen ✨`,
           attachments: [{ url, type: "image/png", name: "generated.png" }],
         }).select().single();
-        if (a) setMessages((m) => [...m, a as DBMsg]);
+        if (a) setMessages((m) => m.map(x => x.id === tempId ? (a as DBMsg) : x));
         sfx.receive();
       } catch (e: any) {
         sfx.error();
-        alert("Error generando imagen: " + e.message);
+        setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: "⚠️ Error generando imagen: " + e.message } : x));
       }
       setStreaming(false);
       setImageMode(false);
@@ -132,10 +136,14 @@ export function ChatApp() {
     setMessages((m) => [...m, { id: tempId, conversation_id: id, role: "assistant", content: "", attachments: [], created_at: new Date().toISOString() }]);
 
     try {
-      await streamChat(history, (delta) => {
+      const runner = searchMode ? streamSearch(text, history, (delta) => {
+        acc += delta;
+        setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: acc } : x));
+      }) : streamChat(history, (delta) => {
         acc += delta;
         setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: acc } : x));
       });
+      await runner;
       const { data: a } = await supabase.from("messages")
         .insert({ conversation_id: id, role: "assistant", content: acc })
         .select().single();
@@ -189,6 +197,7 @@ export function ChatApp() {
         onSelect={setConvId}
         onNew={newConv}
         onOpenNotes={() => setNotesOpen(true)}
+        onOpenDebug={() => setDebugOpen(true)}
         onCreateImage={() => { newConv(); setImageMode(true); }}
       />
 
@@ -270,6 +279,7 @@ export function ChatApp() {
       </main>
 
       <NotesPanel open={notesOpen} onClose={() => setNotesOpen(false)} />
+      <DebugPanel open={debugOpen} onClose={() => setDebugOpen(false)} />
       <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
     </div>
     </SpeechCtx.Provider>
