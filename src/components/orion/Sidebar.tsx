@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
-import { Search, Plus, Trash2, Pencil, MessageSquare, StickyNote, X, ImagePlus } from "lucide-react";
+import { Search, Plus, Trash2, Pencil, MessageSquare, StickyNote, X, ImagePlus, Bug } from "lucide-react";
 import { OrionLogo } from "./OrionLogo";
 
 type Conv = { id: string; title: string; updated_at: string };
@@ -14,6 +14,7 @@ export function Sidebar({
   onSelect,
   onNew,
   onOpenNotes,
+  onOpenDebug,
   onCreateImage,
 }: {
   open: boolean;
@@ -22,6 +23,7 @@ export function Sidebar({
   onSelect: (id: string) => void;
   onNew: () => void;
   onOpenNotes: () => void;
+  onOpenDebug: () => void;
   onCreateImage: () => void;
 }) {
   const [convs, setConvs] = useState<Conv[]>([]);
@@ -108,6 +110,12 @@ export function Sidebar({
             className="w-full tap flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card hover:bg-accent border border-border text-sm"
           >
             <StickyNote className="w-4 h-4 text-primary" /> Modo Notas
+          </button>
+          <button
+            onClick={() => { sfx.open(); onOpenDebug(); }}
+            className="w-full tap flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card hover:bg-accent border border-border text-sm"
+          >
+            <Bug className="w-4 h-4 text-primary" /> Modo Debug
           </button>
         </div>
 
