@@ -8,11 +8,11 @@ export type ChatMsg = { role: "user" | "assistant" | "system"; content: any };
 
 const HEADERS = { "content-type": "application/json", apikey: ANON, authorization: `Bearer ${ANON}` };
 
-export async function streamChat(messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
+async function streamFromBody(body: Record<string, unknown>, onDelta: (s: string) => void, signal?: AbortSignal) {
   const r = await fetch(FN_URL, {
     method: "POST",
     headers: HEADERS,
-    body: JSON.stringify({ mode: "chat", messages, deviceId: getDeviceId() }),
+    body: JSON.stringify(body),
     signal,
   });
   if (!r.ok || !r.body) {
@@ -49,11 +49,35 @@ export async function streamChat(messages: ChatMsg[], onDelta: (s: string) => vo
   }
 }
 
+export async function streamChat(messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
+  return streamFromBody({ mode: "chat", messages, deviceId: getDeviceId() }, onDelta, signal);
+}
+
+export async function streamSearch(query: string, messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
+  return streamFromBody({ mode: "web-search", query, messages, deviceId: getDeviceId() }, onDelta, signal);
+}
+
+export async function streamDebugVisual(imageUrl: string, notes: string, onDelta: (s: string) => void, signal?: AbortSignal) {
+  return streamFromBody({ mode: "debug-visual", imageUrl, notes, deviceId: getDeviceId() }, onDelta, signal);
+}
+
 export async function generateImage(prompt: string): Promise<string> {
-  const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ mode: "image", prompt }) });
-  const d = await r.json();
+  const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ mode: "image", prompt, deviceId: getDeviceId() }) });
+  const text = await r.text();
+  let d: any = {};
+  try { d = JSON.parse(text); } catch { throw new Error("El generador devolvió una respuesta inválida. Intenta de nuevo."); }
+  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
   if (!d.imageUrl) throw new Error("No image returned");
   return d.imageUrl;
+}
+
+export function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("No se pudo leer la imagen"));
+    reader.readAsDataURL(file);
+  });
 }
 
 export async function uploadAttachment(file: File, bucket = "chat-attachments"): Promise<string> {
