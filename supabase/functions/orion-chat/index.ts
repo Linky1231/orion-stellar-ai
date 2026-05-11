@@ -145,11 +145,49 @@ Deno.serve(async (req) => {
 
     // Image generation
     if (mode === "image") {
-      const cleanPrompt = encodeURIComponent(String(prompt || "imagen creativa"));
+      const userNotes = await getUserNotes(deviceId);
+      const noteContext = compactNotesForPrompt(userNotes);
+      const enrichedPrompt = noteContext
+        ? `${String(prompt || "imagen creativa")}. Contexto del proyecto indie del usuario: ${noteContext}. Mantén coherencia con esas notas.`
+        : String(prompt || "imagen creativa");
+      const cleanPrompt = encodeURIComponent(enrichedPrompt.slice(0, 1800));
       const url = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&seed=${Date.now()}`;
       return new Response(JSON.stringify({ imageUrl: url }), {
         headers: { ...corsHeaders, "content-type": "application/json" },
       });
+    }
+
+    if (mode === "debug-visual") {
+      const { imageUrl } = body as any;
+      if (!imageUrl) return new Response(JSON.stringify({ error: "Falta imagen para analizar." }), { status: 400, headers: { ...corsHeaders, "content-type": "application/json" } });
+      const r = await lovableAI([
+        { role: "system", content: DEBUG_PROMPT },
+        { role: "user", content: [
+          { type: "text", text: `Contexto extra del dev: ${body.notes || "Sin contexto extra"}` },
+          { type: "image_url", image_url: { url: imageUrl } },
+        ] },
+      ], true, "google/gemini-2.5-flash");
+      if (!r.ok) {
+        const t = await r.text();
+        return new Response(JSON.stringify({ error: t }), { status: r.status, headers: { ...corsHeaders, "content-type": "application/json" } });
+      }
+      return new Response(stripReasoningStream(r.body), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
+    }
+
+    if (mode === "web-search") {
+      const query = String(body.query || messages?.at?.(-1)?.content || "").slice(0, 400);
+      const searchUrl = `https://r.jina.ai/http://r.jina.ai/http://www.google.com/search?q=${encodeURIComponent(query)}`;
+      const searchText = await fetch(searchUrl).then((r) => r.text()).catch(() => "");
+      const r = await lovableAI([
+        { role: "system", content: "Responde en español con información encontrada en internet. Sé claro, directo y cita las fuentes o URLs visibles. Si los resultados son pobres, dilo." },
+        ...(messages || []),
+        { role: "user", content: `Consulta: ${query}\n\nResultados web recuperados:\n${searchText.slice(0, 12000)}` },
+      ], true);
+      if (!r.ok) {
+        const t = await r.text();
+        return new Response(JSON.stringify({ error: t }), { status: r.status, headers: { ...corsHeaders, "content-type": "application/json" } });
+      }
+      return new Response(stripReasoningStream(r.body), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
     }
 
     // Extract memory facts from a user message
