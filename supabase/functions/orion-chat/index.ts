@@ -9,8 +9,28 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 const FREE_AI_URL = "https://text.pollinations.ai/openai";
 const FREE_TEXT_MODEL = "openai-fast";
+
+const DEBUG_PROMPT = `Estás en MODO DEBUG VISUAL. Analiza la captura real del videojuego indie con precisión profesional como directora de arte + UX lead.
+
+Detecta problemas visibles de UI/UX, HUD, contraste, alineación, márgenes, gameplay visual, pulido, arte, cámara, combate, menús, rendimiento aparente, diseño de niveles, profesionalismo y placeholders.
+
+FORMATO OBLIGATORIO markdown:
+# Diagnóstico visual
+1-2 frases sobre lo que se ve y la sensación general.
+
+# Problemas detectados
+Lista priorizada, máximo 6. Cada item: **[Categoría] Problema concreto** — por qué afecta al jugador.
+
+# Cómo arreglarlo
+Soluciones específicas y accionables para cada problema.
+
+# Veredicto
+Profesional / semi-pulido / prototipo + el cambio #1 que más subiría la calidad percibida.
+
+Reglas: directo, técnico, honesto. No inventes problemas no visibles. Si no es un videojuego, dilo.`;
 
 function extractJsonObject(text: string) {
   const start = text.indexOf("{");
@@ -30,6 +50,26 @@ async function freeAI(messages: any[], stream = false, jsonMode = false) {
       ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
     }),
   });
+}
+
+async function lovableAI(messages: any[], stream = false, model = "google/gemini-2.5-flash") {
+  if (!LOVABLE_API_KEY) return freeAI(messages, stream);
+  return fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", "Lovable-API-Key": LOVABLE_API_KEY },
+    body: JSON.stringify({ model, messages, stream }),
+  });
+}
+
+function compactNotesForPrompt(userNotes: any[]) {
+  if (!Array.isArray(userNotes) || userNotes.length === 0) return "";
+  return userNotes.slice(0, 12).map((n: any) => `${n.title}: ${n.ai_summary || String(n.content || "").slice(0, 180)}`).join(" | ");
+}
+
+async function getUserNotes(deviceId?: string) {
+  if (!deviceId) return [];
+  const res = await sb(`notes?device_id=eq.${encodeURIComponent(deviceId)}&select=title,category,status,section,ai_summary,content&order=updated_at.desc&limit=30`);
+  try { return await res.json(); } catch { return []; }
 }
 
 function stripReasoningStream(body: ReadableStream<Uint8Array> | null) {
