@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
 
     if (mode === "web-search") {
       const query = String(body.query || messages?.at?.(-1)?.content || "").slice(0, 400);
-      const searchUrl = `https://r.jina.ai/http://r.jina.ai/http://www.google.com/search?q=${encodeURIComponent(query)}`;
+      const searchUrl = `https://r.jina.ai/http://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
       const searchText = await fetch(searchUrl).then((r) => r.text()).catch(() => "");
       const r = await lovableAI([
         { role: "system", content: "Responde en español con información encontrada en internet. Sé claro, directo y cita las fuentes o URLs visibles. Si los resultados son pobres, dilo." },
