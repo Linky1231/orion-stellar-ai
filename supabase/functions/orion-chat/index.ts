@@ -196,6 +196,24 @@ Deno.serve(async (req) => {
     if (mode === "debug-visual") {
       const { imageUrl } = body as any;
       if (!imageUrl) return new Response(JSON.stringify({ error: "Falta imagen para analizar." }), { status: 400, headers: { ...corsHeaders, "content-type": "application/json" } });
+
+      // Fetch image and convert to base64 data URL so the vision model can read it reliably
+      let dataUrl = imageUrl;
+      try {
+        if (!String(imageUrl).startsWith("data:")) {
+          const imgRes = await fetch(imageUrl);
+          if (!imgRes.ok) throw new Error(`No se pudo descargar la imagen (${imgRes.status})`);
+          const ct = imgRes.headers.get("content-type") || "image/png";
+          const buf = new Uint8Array(await imgRes.arrayBuffer());
+          let bin = "";
+          for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+          const b64 = btoa(bin);
+          dataUrl = `data:${ct};base64,${b64}`;
+        }
+      } catch (e) {
+        return new Response(JSON.stringify({ error: `No pude leer la imagen: ${String(e)}` }), { status: 400, headers: { ...corsHeaders, "content-type": "application/json" } });
+      }
+
       const r = await fetch(FREE_AI_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -206,7 +224,7 @@ Deno.serve(async (req) => {
             { role: "system", content: DEBUG_PROMPT },
             { role: "user", content: [
               { type: "text", text: `Contexto extra del dev: ${body.notes || "Sin contexto extra"}` },
-              { type: "image_url", image_url: { url: imageUrl } },
+              { type: "image_url", image_url: { url: dataUrl } },
             ] },
           ],
         }),
