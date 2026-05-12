@@ -61,6 +61,42 @@ async function lovableAI(messages: any[], stream = false, model = "google/gemini
   });
 }
 
+function normalizeAiErrorText(text: string) {
+  try {
+    const parsed = JSON.parse(text);
+    if (typeof parsed?.message === "string") return parsed.message;
+    if (typeof parsed?.error === "string") return normalizeAiErrorText(parsed.error);
+  } catch {
+    // Keep the original text when the upstream response is not JSON.
+  }
+  return text || "El servicio de IA no respondió correctamente.";
+}
+
+function aiErrorResponse(status: number, text: string, stream = false) {
+  const message = normalizeAiErrorText(text);
+  if (status === 402 || message.toLowerCase().includes("not enough credits") || message.toLowerCase().includes("payment_required")) {
+    const safeMessage = "No hay créditos suficientes para completar esta acción. Añade saldo en Settings → Workspace → Cloud & AI balance.";
+    if (stream) {
+      const encoder = new TextEncoder();
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: safeMessage } }] })}\n\n`));
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+          },
+        }),
+        { status: 200, headers: { ...corsHeaders, "content-type": "text/event-stream" } },
+      );
+    }
+    return new Response(JSON.stringify({ error: "PAYMENT_REQUIRED", message: safeMessage, fallback: false }), {
+      status: 200,
+      headers: { ...corsHeaders, "content-type": "application/json" },
+    });
+  }
+  return new Response(JSON.stringify({ error: message }), { status, headers: { ...corsHeaders, "content-type": "application/json" } });
+}
+
 function compactNotesForPrompt(userNotes: any[]) {
   if (!Array.isArray(userNotes) || userNotes.length === 0) return "";
   return userNotes.slice(0, 12).map((n: any) => `${n.title}: ${n.ai_summary || String(n.content || "").slice(0, 180)}`).join(" | ");
