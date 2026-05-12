@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
       ], true, "google/gemini-2.5-flash");
       if (!r.ok) {
         const t = await r.text();
-        return new Response(JSON.stringify({ error: t }), { status: r.status, headers: { ...corsHeaders, "content-type": "application/json" } });
+        return aiErrorResponse(r.status, t, true);
       }
       return new Response(stripReasoningStream(r.body), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
     }
@@ -221,7 +221,7 @@ Deno.serve(async (req) => {
       ], true);
       if (!r.ok) {
         const t = await r.text();
-        return new Response(JSON.stringify({ error: t }), { status: r.status, headers: { ...corsHeaders, "content-type": "application/json" } });
+        return aiErrorResponse(r.status, t, true);
       }
       return new Response(stripReasoningStream(r.body), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
     }
@@ -339,7 +339,7 @@ ESTILO: inteligente, elegante, analítico, preciso, profesional, directo. Nunca 
 
     if (!r.ok) {
       const t = await r.text();
-      return new Response(JSON.stringify({ error: t }), { status: r.status, headers: { ...corsHeaders, "content-type": "application/json" } });
+      return aiErrorResponse(r.status, t, true);
     }
 
     return new Response(stripReasoningStream(r.body), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
