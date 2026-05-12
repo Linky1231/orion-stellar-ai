@@ -308,7 +308,7 @@ ESTILO: inteligente, elegante, analítico, preciso, profesional, directo. Nunca 
       ]);
       if (!r.ok) {
         const t = await r.text();
-        return new Response(JSON.stringify({ analysis: "", error: `AI ${r.status}: ${t.slice(0, 200)}` }), { headers: { ...corsHeaders, "content-type": "application/json" } });
+        return aiErrorResponse(r.status, t);
       }
       const d = await safeJson(r);
       return new Response(JSON.stringify({ analysis: d?.choices?.[0]?.message?.content || "" }), { headers: { ...corsHeaders, "content-type": "application/json" } });
