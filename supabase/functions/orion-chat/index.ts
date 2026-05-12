@@ -196,13 +196,21 @@ Deno.serve(async (req) => {
     if (mode === "debug-visual") {
       const { imageUrl } = body as any;
       if (!imageUrl) return new Response(JSON.stringify({ error: "Falta imagen para analizar." }), { status: 400, headers: { ...corsHeaders, "content-type": "application/json" } });
-      const r = await lovableAI([
-        { role: "system", content: DEBUG_PROMPT },
-        { role: "user", content: [
-          { type: "text", text: `Contexto extra del dev: ${body.notes || "Sin contexto extra"}` },
-          { type: "image_url", image_url: { url: imageUrl } },
-        ] },
-      ], true, "google/gemini-2.5-flash");
+      const r = await fetch(FREE_AI_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "openai",
+          stream: true,
+          messages: [
+            { role: "system", content: DEBUG_PROMPT },
+            { role: "user", content: [
+              { type: "text", text: `Contexto extra del dev: ${body.notes || "Sin contexto extra"}` },
+              { type: "image_url", image_url: { url: imageUrl } },
+            ] },
+          ],
+        }),
+      });
       if (!r.ok) {
         const t = await r.text();
         return aiErrorResponse(r.status, t, true);
@@ -214,7 +222,7 @@ Deno.serve(async (req) => {
       const query = String(body.query || messages?.at?.(-1)?.content || "").slice(0, 400);
       const searchUrl = `https://r.jina.ai/http://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
       const searchText = await fetch(searchUrl).then((r) => r.text()).catch(() => "");
-      const r = await lovableAI([
+      const r = await freeAI([
         { role: "system", content: "Responde en español con información encontrada en internet. Sé claro, directo y cita las fuentes o URLs visibles. Si los resultados son pobres, dilo." },
         ...(messages || []),
         { role: "user", content: `Consulta: ${query}\n\nResultados web recuperados:\n${searchText.slice(0, 12000)}` },
