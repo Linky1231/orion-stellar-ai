@@ -214,12 +214,12 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: `No pude leer la imagen: ${String(e)}` }), { status: 400, headers: { ...corsHeaders, "content-type": "application/json" } });
       }
 
-      const r = await fetch(FREE_AI_URL, {
+      let r = await fetch(FREE_AI_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           model: "openai",
-          stream: true,
+          stream: false,
           messages: [
             { role: "system", content: DEBUG_PROMPT },
             { role: "user", content: [
@@ -229,6 +229,32 @@ Deno.serve(async (req) => {
           ],
         }),
       });
+      if (!r.ok) {
+        const t = await r.text();
+        return aiErrorResponse(r.status, t, true);
+      }
+      const firstText = await r.text();
+      const firstJson = (() => { try { return JSON.parse(firstText); } catch { return null; } })();
+      const firstContent = String(firstJson?.choices?.[0]?.message?.content || "");
+      const missedImage = /no (veo|puedo ver)|can't (view|see)|cannot (view|see)|unable to (view|see)|no image|ninguna captura/i.test(firstContent);
+      if (!missedImage && firstContent.trim()) {
+        const encoder = new TextEncoder();
+        return new Response(new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: firstContent } }] })}\n\n`));
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+          },
+        }), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
+      }
+
+      r = await lovableAI([
+        { role: "system", content: DEBUG_PROMPT },
+        { role: "user", content: [
+          { type: "text", text: `Contexto extra del dev: ${body.notes || "Sin contexto extra"}` },
+          { type: "image_url", image_url: { url: dataUrl } },
+        ] },
+      ], true, "google/gemini-2.5-flash");
       if (!r.ok) {
         const t = await r.text();
         return aiErrorResponse(r.status, t, true);
