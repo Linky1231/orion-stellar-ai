@@ -15,6 +15,14 @@ async function streamFromBody(body: Record<string, unknown>, onDelta: (s: string
     body: JSON.stringify(body),
     signal,
   });
+  const contentType = r.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const d = await r.json().catch(() => null);
+    const message = d?.message || d?.error;
+    if (message) onDelta(String(message));
+    if (!r.ok && !message) throw new Error(`HTTP ${r.status}`);
+    return;
+  }
   if (!r.ok || !r.body) {
     const t = await r.text().catch(() => "");
     if (r.status === 402) throw new Error("Sin créditos en Lovable AI. Añade saldo en Settings → Workspace → Cloud & AI balance.");
