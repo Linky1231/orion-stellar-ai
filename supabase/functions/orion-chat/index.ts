@@ -196,13 +196,21 @@ Deno.serve(async (req) => {
     if (mode === "debug-visual") {
       const { imageUrl } = body as any;
       if (!imageUrl) return new Response(JSON.stringify({ error: "Falta imagen para analizar." }), { status: 400, headers: { ...corsHeaders, "content-type": "application/json" } });
-      const r = await lovableAI([
-        { role: "system", content: DEBUG_PROMPT },
-        { role: "user", content: [
-          { type: "text", text: `Contexto extra del dev: ${body.notes || "Sin contexto extra"}` },
-          { type: "image_url", image_url: { url: imageUrl } },
-        ] },
-      ], true, "google/gemini-2.5-flash");
+      const r = await fetch(FREE_AI_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "openai",
+          stream: true,
+          messages: [
+            { role: "system", content: DEBUG_PROMPT },
+            { role: "user", content: [
+              { type: "text", text: `Contexto extra del dev: ${body.notes || "Sin contexto extra"}` },
+              { type: "image_url", image_url: { url: imageUrl } },
+            ] },
+          ],
+        }),
+      });
       if (!r.ok) {
         const t = await r.text();
         return aiErrorResponse(r.status, t, true);
