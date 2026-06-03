@@ -93,8 +93,18 @@ export function CodePanel({ open, onClose }: { open: boolean; onClose: () => voi
               )}
             </div>
             {result ? (
-              <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert prose-p:my-1.5 prose-pre:bg-muted prose-pre:text-foreground prose-pre:rounded-xl prose-pre:p-3 prose-code:text-foreground">
-                <ReactMarkdown>{result}</ReactMarkdown>
+              <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert prose-p:my-1.5 prose-pre:bg-muted prose-pre:text-foreground prose-pre:rounded-xl prose-pre:p-3 prose-pre:overflow-x-auto prose-pre:max-w-full prose-code:text-foreground prose-code:break-words break-words overflow-hidden">
+                <ReactMarkdown
+                  components={{
+                    pre: ({ node, ...props }) => <pre {...props} className="overflow-x-auto max-w-full whitespace-pre rounded-xl bg-muted p-3 text-xs" />,
+                    code: ({ node, className, children, ...props }: any) => {
+                      const inline = !className;
+                      return inline
+                        ? <code className="px-1 py-0.5 rounded bg-muted text-xs break-words" {...props}>{children}</code>
+                        : <code className={className} {...props}>{children}</code>;
+                    },
+                  }}
+                >{result}</ReactMarkdown>
               </div>
             ) : (
               <div className="text-sm text-muted-foreground flex items-center gap-2">
