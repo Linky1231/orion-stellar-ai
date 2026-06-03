@@ -69,6 +69,9 @@ export async function streamDebugVisual(imageUrl: string, notes: string, onDelta
   return streamFromBody({ mode: "debug-visual", imageUrl, notes, deviceId: getDeviceId() }, onDelta, signal);
 }
 
+export async function streamCode(prompt: string, language: string, messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
+  return streamFromBody({ mode: "code", prompt, language, messages, deviceId: getDeviceId() }, onDelta, signal);
+
 export async function generateImage(prompt: string): Promise<string> {
   const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ mode: "image", prompt, deviceId: getDeviceId() }) });
   const text = await r.text();
