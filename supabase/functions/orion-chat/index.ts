@@ -308,6 +308,37 @@ Deno.serve(async (req) => {
       return new Response(stripReasoningStream(r.body), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
     }
 
+    if (mode === "code") {
+      const language = String(body.language || "auto");
+      const userPrompt = String(body.prompt || "").slice(0, 8000);
+      if (!userPrompt) return new Response(JSON.stringify({ error: "Falta la descripción del código." }), { status: 400, headers: { ...corsHeaders, "content-type": "application/json" } });
+      const sys = `Estás en MODO CODE. Eres un ingeniero senior. Genera código limpio, idiomático y comentado en ${language === "auto" ? "el lenguaje más apropiado" : language}.
+
+FORMATO OBLIGATORIO markdown:
+# Solución
+1-2 frases describiendo el enfoque.
+
+# Código
+\`\`\`${language === "auto" ? "" : language}
+// código aquí
+\`\`\`
+
+# Uso
+Ejemplo de uso y notas importantes (dependencias, edge cases).
+
+Reglas: directo, sin paja. Si la petición es ambigua, asume valores sensatos y dilo. Nunca pongas placeholders tipo "TODO" salvo que sea esencial.`;
+      const r = await freeAI([
+        { role: "system", content: sys },
+        ...(messages || []),
+        { role: "user", content: userPrompt },
+      ], true);
+      if (!r.ok) {
+        const t = await r.text();
+        return aiErrorResponse(r.status, t, true);
+      }
+      return new Response(stripReasoningStream(r.body), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
+    }
+
     if (mode === "web-search") {
       const query = String(body.query || messages?.at?.(-1)?.content || "").slice(0, 400);
       const searchUrl = `https://r.jina.ai/http://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
