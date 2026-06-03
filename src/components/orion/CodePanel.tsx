@@ -77,7 +77,7 @@ export function CodePanel({ open, onClose }: { open: boolean; onClose: () => voi
             </button>
           </div>
 
-          <div className="glass-strong rounded-2xl p-5 border border-border min-h-[280px]">
+          <div className="glass-strong rounded-2xl p-5 border border-border min-h-[280px] overflow-hidden min-w-0">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <OrionLogo size={28} glow={running} />
