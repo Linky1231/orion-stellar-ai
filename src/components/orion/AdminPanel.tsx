@@ -33,7 +33,7 @@ export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => vo
     setCfg(c.data);
     setKb((k.data as KB[]) || []);
     setRefs((r.data as Ref[]) || []);
-    setBuilda((b.data as Builda[]) || []);
+    setBuilda(((b.data as unknown) as Builda[]) || []);
   }
   useEffect(() => { if (open) load(); }, [open]);
 
