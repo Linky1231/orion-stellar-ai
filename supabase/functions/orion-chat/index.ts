@@ -77,6 +77,20 @@ async function freeAI(messages: any[], stream = false, jsonMode = false): Promis
   });
 }
 
+async function freeVisionAI(messages: any[], stream = false): Promise<Response> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const r = await fetch(FREE_AI_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "openai", messages, stream }),
+    });
+    if (r.status !== 429) return r;
+    try { await r.body?.cancel(); } catch { /* ignore */ }
+    await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
+  }
+  return lovableAI(messages, stream, "google/gemini-2.5-flash");
+}
+
 async function lovableAI(messages: any[], stream = false, model = "google/gemini-2.5-flash") {
   if (!LOVABLE_API_KEY) return freeAI(messages, stream);
   return fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -99,6 +113,26 @@ function normalizeAiErrorText(text: string) {
 
 function aiErrorResponse(status: number, text: string, stream = false) {
   const message = normalizeAiErrorText(text);
+  if (status === 429 || message.toLowerCase().includes("queue full") || message.toLowerCase().includes("rate limit")) {
+    const safeMessage = "El servicio gratuito está saturado ahora mismo. Espera unos segundos e inténtalo de nuevo.";
+    if (stream) {
+      const encoder = new TextEncoder();
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: safeMessage } }] })}\n\n`));
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+          },
+        }),
+        { status: 200, headers: { ...corsHeaders, "content-type": "text/event-stream" } },
+      );
+    }
+    return new Response(JSON.stringify({ error: "RATE_LIMITED", message: safeMessage, fallback: false }), {
+      status: 200,
+      headers: { ...corsHeaders, "content-type": "application/json" },
+    });
+  }
   if (status === 402 || message.toLowerCase().includes("not enough credits") || message.toLowerCase().includes("payment_required")) {
     const safeMessage = "No hay créditos suficientes para completar esta acción. Añade saldo en Settings → Workspace → Cloud & AI balance.";
     if (stream) {
@@ -239,21 +273,14 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: `No pude leer la imagen: ${String(e)}` }), { status: 400, headers: { ...corsHeaders, "content-type": "application/json" } });
       }
 
-      let r = await fetch(FREE_AI_URL, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          model: "openai",
-          stream: false,
-          messages: [
-            { role: "system", content: DEBUG_PROMPT },
-            { role: "user", content: [
-              { type: "text", text: `Contexto extra del dev: ${body.notes || "Sin contexto extra"}` },
-              { type: "image_url", image_url: { url: dataUrl } },
-            ] },
-          ],
-        }),
-      });
+      const visionMessages = [
+        { role: "system", content: DEBUG_PROMPT },
+        { role: "user", content: [
+          { type: "text", text: `Contexto extra del dev: ${body.notes || "Sin contexto extra"}` },
+          { type: "image_url", image_url: { url: dataUrl } },
+        ] },
+      ];
+      let r = await freeVisionAI(visionMessages, false);
       if (!r.ok) {
         const t = await r.text();
         return aiErrorResponse(r.status, t, true);
@@ -273,13 +300,7 @@ Deno.serve(async (req) => {
         }), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
       }
 
-      r = await lovableAI([
-        { role: "system", content: DEBUG_PROMPT },
-        { role: "user", content: [
-          { type: "text", text: `Contexto extra del dev: ${body.notes || "Sin contexto extra"}` },
-          { type: "image_url", image_url: { url: dataUrl } },
-        ] },
-      ], true, "google/gemini-2.5-flash");
+      r = await lovableAI(visionMessages, true, "google/gemini-2.5-flash");
       if (!r.ok) {
         const t = await r.text();
         return aiErrorResponse(r.status, t, true);
