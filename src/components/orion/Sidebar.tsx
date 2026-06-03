@@ -119,6 +119,12 @@ export function Sidebar({
           >
             <Bug className="w-4 h-4 text-primary" /> Modo Debug
           </button>
+          <button
+            onClick={() => { sfx.open(); onOpenCode(); }}
+            className="w-full tap flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card hover:bg-accent border border-border text-sm"
+          >
+            <Code2 className="w-4 h-4 text-primary" /> Modo Code
+          </button>
         </div>
 
         <div className="px-3 pb-2">
