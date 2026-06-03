@@ -2,29 +2,38 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sfx } from "@/lib/sounds";
 import { uploadAttachment } from "@/lib/orion-api";
-import { X, Plus, Trash2, Save, Upload, Image as ImageIcon } from "lucide-react";
+import { X, Plus, Trash2, Save, Upload, Image as ImageIcon, Pencil, Code2 } from "lucide-react";
 
 type KB = { id: string; title: string; content: string };
 type Ref = { id: string; name: string; url: string; description: string };
+type Builda = { id: string; title: string; description: string | null; code: string };
 
 export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [tab, setTab] = useState<"config" | "kb" | "refs">("config");
+  const [tab, setTab] = useState<"config" | "kb" | "refs" | "builda">("config");
   const [cfg, setCfg] = useState<any>(null);
   const [kb, setKb] = useState<KB[]>([]);
   const [refs, setRefs] = useState<Ref[]>([]);
+  const [builda, setBuilda] = useState<Builda[]>([]);
   const [newKb, setNewKb] = useState({ title: "", content: "" });
+  const [editKbId, setEditKbId] = useState<string | null>(null);
+  const [editKbDraft, setEditKbDraft] = useState({ title: "", content: "" });
   const [newRefName, setNewRefName] = useState("");
   const [newRefDesc, setNewRefDesc] = useState("");
+  const [newBuilda, setNewBuilda] = useState({ title: "", description: "", code: "" });
+  const [editBuildaId, setEditBuildaId] = useState<string | null>(null);
+  const [editBuildaDraft, setEditBuildaDraft] = useState({ title: "", description: "", code: "" });
 
   async function load() {
-    const [c, k, r] = await Promise.all([
+    const [c, k, r, b] = await Promise.all([
       supabase.from("orion_config").select("*").eq("id", 1).single(),
       supabase.from("orion_knowledge").select("*").order("created_at", { ascending: false }),
       supabase.from("orion_reference_images").select("*").order("created_at", { ascending: false }),
+      supabase.from("orion_builda_scripts" as any).select("*").order("created_at", { ascending: false }),
     ]);
     setCfg(c.data);
     setKb((k.data as KB[]) || []);
     setRefs((r.data as Ref[]) || []);
+    setBuilda((b.data as Builda[]) || []);
   }
   useEffect(() => { if (open) load(); }, [open]);
 
@@ -46,6 +55,19 @@ export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => vo
     await supabase.from("orion_knowledge").delete().eq("id", id);
     load();
   }
+  function startEditKb(k: KB) {
+    setEditKbId(k.id);
+    setEditKbDraft({ title: k.title, content: k.content });
+  }
+  async function saveEditKb() {
+    if (!editKbId) return;
+    sfx.tap();
+    await supabase.from("orion_knowledge").update({
+      title: editKbDraft.title, content: editKbDraft.content,
+    }).eq("id", editKbId);
+    setEditKbId(null);
+    load();
+  }
 
   async function addRef(file: File) {
     if (!newRefName) { alert("Pon un nombre"); return; }
@@ -56,6 +78,28 @@ export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => vo
   }
   async function delRef(id: string) {
     await supabase.from("orion_reference_images").delete().eq("id", id);
+    load();
+  }
+
+  async function addBuilda() {
+    if (!newBuilda.title.trim() || !newBuilda.code.trim()) return;
+    await supabase.from("orion_builda_scripts" as any).insert(newBuilda);
+    setNewBuilda({ title: "", description: "", code: "" });
+    load();
+  }
+  async function delBuilda(id: string) {
+    await supabase.from("orion_builda_scripts" as any).delete().eq("id", id);
+    load();
+  }
+  function startEditBuilda(b: Builda) {
+    setEditBuildaId(b.id);
+    setEditBuildaDraft({ title: b.title, description: b.description || "", code: b.code });
+  }
+  async function saveEditBuilda() {
+    if (!editBuildaId) return;
+    sfx.tap();
+    await supabase.from("orion_builda_scripts" as any).update(editBuildaDraft).eq("id", editBuildaId);
+    setEditBuildaId(null);
     load();
   }
 
@@ -70,11 +114,12 @@ export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => vo
           </div>
           <button onClick={onClose} className="tap p-2 rounded-lg hover:bg-accent"><X className="w-4 h-4" /></button>
         </div>
-        <div className="px-5 pt-3 flex gap-2">
+        <div className="px-5 pt-3 flex gap-2 flex-wrap">
           {[
             ["config", "Comportamiento"],
             ["kb", "Conocimiento"],
-            ["refs", "Imágenes de referencia"],
+            ["refs", "Imágenes"],
+            ["builda", "Code (Builda)"],
           ].map(([k, l]) => (
             <button
               key={k}
@@ -126,11 +171,38 @@ export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => vo
               </div>
               {kb.map((k) => (
                 <div key={k.id} className="rounded-xl bg-card border border-border p-4">
-                  <div className="flex justify-between items-start gap-2">
-                    <div className="font-semibold">{k.title}</div>
-                    <button onClick={() => delKb(k.id)} className="text-destructive p-1"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap mt-1">{k.content}</p>
+                  {editKbId === k.id ? (
+                    <div className="space-y-2">
+                      <input
+                        value={editKbDraft.title}
+                        onChange={(e) => setEditKbDraft({ ...editKbDraft, title: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg bg-muted outline-none font-semibold"
+                      />
+                      <textarea
+                        value={editKbDraft.content}
+                        onChange={(e) => setEditKbDraft({ ...editKbDraft, content: e.target.value })}
+                        rows={6}
+                        className="w-full px-3 py-2 rounded-lg bg-muted outline-none resize-y text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={saveEditKb} className="tap px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm flex items-center gap-1">
+                          <Save className="w-3.5 h-3.5" /> Guardar
+                        </button>
+                        <button onClick={() => setEditKbId(null)} className="tap px-3 py-1.5 rounded-lg bg-muted text-sm">Cancelar</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="font-semibold">{k.title}</div>
+                        <div className="flex gap-1">
+                          <button onClick={() => startEditKb(k)} className="p-1 hover:bg-accent rounded"><Pencil className="w-4 h-4" /></button>
+                          <button onClick={() => delKb(k.id)} className="text-destructive p-1"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap mt-1">{k.content}</p>
+                    </>
+                  )}
                 </div>
               ))}
               {kb.length === 0 && <div className="text-center text-sm text-muted-foreground py-8">Base vacía</div>}
@@ -176,6 +248,83 @@ export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => vo
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {tab === "builda" && (
+            <div className="space-y-4">
+              <div className="text-xs text-muted-foreground flex items-center gap-2">
+                <Code2 className="w-3.5 h-3.5" /> Scripts de Builda. Orión los usará como referencia cuando elijas "builda" en el Modo Code.
+              </div>
+              <div className="rounded-2xl bg-card border border-border p-4 space-y-2">
+                <input
+                  placeholder="Título (ej: bucle for, declarar variable…)"
+                  value={newBuilda.title}
+                  onChange={(e) => setNewBuilda({ ...newBuilda, title: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-muted outline-none"
+                />
+                <input
+                  placeholder="Descripción breve (opcional)"
+                  value={newBuilda.description}
+                  onChange={(e) => setNewBuilda({ ...newBuilda, description: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-muted outline-none"
+                />
+                <textarea
+                  placeholder="Código Builda…"
+                  value={newBuilda.code}
+                  onChange={(e) => setNewBuilda({ ...newBuilda, code: e.target.value })}
+                  rows={8}
+                  className="w-full px-3 py-2 rounded-lg bg-muted outline-none resize-y font-mono text-xs"
+                />
+                <button onClick={addBuilda} className="tap px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm flex items-center gap-1">
+                  <Plus className="w-4 h-4" /> Añadir script
+                </button>
+              </div>
+              {builda.map((b) => (
+                <div key={b.id} className="rounded-xl bg-card border border-border p-4">
+                  {editBuildaId === b.id ? (
+                    <div className="space-y-2">
+                      <input
+                        value={editBuildaDraft.title}
+                        onChange={(e) => setEditBuildaDraft({ ...editBuildaDraft, title: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg bg-muted outline-none font-semibold"
+                      />
+                      <input
+                        value={editBuildaDraft.description}
+                        onChange={(e) => setEditBuildaDraft({ ...editBuildaDraft, description: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg bg-muted outline-none text-sm"
+                      />
+                      <textarea
+                        value={editBuildaDraft.code}
+                        onChange={(e) => setEditBuildaDraft({ ...editBuildaDraft, code: e.target.value })}
+                        rows={8}
+                        className="w-full px-3 py-2 rounded-lg bg-muted outline-none resize-y font-mono text-xs"
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={saveEditBuilda} className="tap px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm flex items-center gap-1">
+                          <Save className="w-3.5 h-3.5" /> Guardar
+                        </button>
+                        <button onClick={() => setEditBuildaId(null)} className="tap px-3 py-1.5 rounded-lg bg-muted text-sm">Cancelar</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <div className="font-semibold text-sm">{b.title}</div>
+                          {b.description && <div className="text-xs text-muted-foreground">{b.description}</div>}
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={() => startEditBuilda(b)} className="p-1 hover:bg-accent rounded"><Pencil className="w-4 h-4" /></button>
+                          <button onClick={() => delBuilda(b.id)} className="text-destructive p-1"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </div>
+                      <pre className="text-xs font-mono bg-muted rounded-lg p-3 mt-2 overflow-x-auto whitespace-pre">{b.code}</pre>
+                    </>
+                  )}
+                </div>
+              ))}
+              {builda.length === 0 && <div className="text-center text-sm text-muted-foreground py-8">Sin scripts de Builda</div>}
             </div>
           )}
         </div>
