@@ -273,21 +273,14 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: `No pude leer la imagen: ${String(e)}` }), { status: 400, headers: { ...corsHeaders, "content-type": "application/json" } });
       }
 
-      let r = await fetch(FREE_AI_URL, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          model: "openai",
-          stream: false,
-          messages: [
-            { role: "system", content: DEBUG_PROMPT },
-            { role: "user", content: [
-              { type: "text", text: `Contexto extra del dev: ${body.notes || "Sin contexto extra"}` },
-              { type: "image_url", image_url: { url: dataUrl } },
-            ] },
-          ],
-        }),
-      });
+      const visionMessages = [
+        { role: "system", content: DEBUG_PROMPT },
+        { role: "user", content: [
+          { type: "text", text: `Contexto extra del dev: ${body.notes || "Sin contexto extra"}` },
+          { type: "image_url", image_url: { url: dataUrl } },
+        ] },
+      ];
+      let r = await freeVisionAI(visionMessages, false);
       if (!r.ok) {
         const t = await r.text();
         return aiErrorResponse(r.status, t, true);
@@ -307,13 +300,7 @@ Deno.serve(async (req) => {
         }), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
       }
 
-      r = await lovableAI([
-        { role: "system", content: DEBUG_PROMPT },
-        { role: "user", content: [
-          { type: "text", text: `Contexto extra del dev: ${body.notes || "Sin contexto extra"}` },
-          { type: "image_url", image_url: { url: dataUrl } },
-        ] },
-      ], true, "google/gemini-2.5-flash");
+      r = await lovableAI(visionMessages, true, "google/gemini-2.5-flash");
       if (!r.ok) {
         const t = await r.text();
         return aiErrorResponse(r.status, t, true);
