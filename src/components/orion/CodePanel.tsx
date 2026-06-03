@@ -5,7 +5,7 @@ import { streamCode } from "@/lib/orion-api";
 import { sfx } from "@/lib/sounds";
 import { OrionLogo } from "./OrionLogo";
 
-const LANGS = ["auto", "typescript", "javascript", "python", "go", "rust", "c#", "c++", "java", "swift", "kotlin", "php", "ruby", "sql", "bash", "html", "css", "gdscript"];
+const LANGS = ["auto", "builda", "typescript", "javascript", "python", "go", "rust", "c#", "c++", "java", "swift", "kotlin", "php", "ruby", "sql", "bash", "html", "css", "gdscript"];
 
 export function CodePanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [prompt, setPrompt] = useState("");
