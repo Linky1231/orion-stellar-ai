@@ -283,6 +283,7 @@ export function ChatApp() {
 
       <NotesPanel open={notesOpen} onClose={() => setNotesOpen(false)} />
       <DebugPanel open={debugOpen} onClose={() => setDebugOpen(false)} />
+      <CodePanel open={codeOpen} onClose={() => setCodeOpen(false)} />
       <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
     </div>
     </SpeechCtx.Provider>
