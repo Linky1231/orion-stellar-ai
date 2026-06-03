@@ -312,7 +312,22 @@ Deno.serve(async (req) => {
       const language = String(body.language || "auto");
       const userPrompt = String(body.prompt || "").slice(0, 8000);
       if (!userPrompt) return new Response(JSON.stringify({ error: "Falta la descripción del código." }), { status: 400, headers: { ...corsHeaders, "content-type": "application/json" } });
-      const sys = `Estás en MODO CODE. Eres un ingeniero senior. Genera código limpio, idiomático y comentado en ${language === "auto" ? "el lenguaje más apropiado" : language}.
+
+      let buildaContext = "";
+      if (language === "builda") {
+        try {
+          const r = await sb("orion_builda_scripts?select=title,description,code&order=created_at.desc&limit=100");
+          const scripts = await r.json();
+          if (Array.isArray(scripts) && scripts.length) {
+            buildaContext = `\n\n## Referencia oficial del lenguaje Builda (úsala como única fuente de verdad para sintaxis y patrones):\n${scripts.map((s: any) => `### ${s.title}\n${s.description ? s.description + "\n" : ""}\`\`\`\n${s.code}\n\`\`\``).join("\n\n")}`;
+          } else {
+            buildaContext = "\n\nNo hay scripts de Builda registrados todavía. Pide al usuario que añada referencias en el panel admin antes de generar código Builda.";
+          }
+        } catch (_e) { /* ignore */ }
+      }
+
+      const langLabel = language === "builda" ? "Builda (lenguaje propio del usuario)" : language === "auto" ? "el lenguaje más apropiado" : language;
+      const sys = `Estás en MODO CODE. Eres un ingeniero senior. Genera código limpio, idiomático y comentado en ${langLabel}.${buildaContext}
 
 FORMATO OBLIGATORIO markdown:
 # Solución
@@ -326,7 +341,7 @@ FORMATO OBLIGATORIO markdown:
 # Uso
 Ejemplo de uso y notas importantes (dependencias, edge cases).
 
-Reglas: directo, sin paja. Si la petición es ambigua, asume valores sensatos y dilo. Nunca pongas placeholders tipo "TODO" salvo que sea esencial.`;
+Reglas: directo, sin paja. Si la petición es ambigua, asume valores sensatos y dilo. Nunca pongas placeholders tipo "TODO" salvo que sea esencial.${language === "builda" ? " Para Builda: respeta SIEMPRE la sintaxis exacta de los scripts de referencia, no inventes funciones ni keywords que no aparezcan en ellos." : ""}`;
       const r = await freeAI([
         { role: "system", content: sys },
         ...(messages || []),
