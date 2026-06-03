@@ -8,6 +8,7 @@ import { OrionLogo } from "./OrionLogo";
 import { Sidebar } from "./Sidebar";
 import { NotesPanel } from "./NotesPanel";
 import { DebugPanel } from "./DebugPanel";
+import { CodePanel } from "./CodePanel";
 import { AdminPanel } from "./AdminPanel";
 import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X } from "lucide-react";
 
@@ -24,6 +25,7 @@ export function ChatApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [convId, setConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DBMsg[]>([]);
@@ -198,6 +200,7 @@ export function ChatApp() {
         onNew={newConv}
         onOpenNotes={() => setNotesOpen(true)}
         onOpenDebug={() => setDebugOpen(true)}
+        onOpenCode={() => setCodeOpen(true)}
         onCreateImage={() => { newConv(); setImageMode(true); }}
       />
 
@@ -280,6 +283,7 @@ export function ChatApp() {
 
       <NotesPanel open={notesOpen} onClose={() => setNotesOpen(false)} />
       <DebugPanel open={debugOpen} onClose={() => setDebugOpen(false)} />
+      <CodePanel open={codeOpen} onClose={() => setCodeOpen(false)} />
       <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
     </div>
     </SpeechCtx.Provider>
