@@ -39,16 +39,41 @@ function extractJsonObject(text: string) {
   try { return JSON.parse(text.slice(start, end + 1)); } catch { return {}; }
 }
 
-async function freeAI(messages: any[], stream = false, jsonMode = false) {
+async function freeAI(messages: any[], stream = false, jsonMode = false): Promise<Response> {
+  // Retry with backoff on 429 (Pollinations queue full), then fall back to Lovable AI
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const r = await fetch(FREE_AI_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: FREE_TEXT_MODEL,
+        messages,
+        stream,
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      }),
+    });
+    if (r.status !== 429) return r;
+    try { await r.body?.cancel(); } catch { /* ignore */ }
+    await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
+  }
+  // Fallback: Lovable AI Gateway
+  if (LOVABLE_API_KEY) {
+    return fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", "Lovable-API-Key": LOVABLE_API_KEY },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages,
+        stream,
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      }),
+    });
+  }
+  // Last resort: return the 429 so caller surfaces a clean error
   return fetch(FREE_AI_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      model: FREE_TEXT_MODEL,
-      messages,
-      stream,
-      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-    }),
+    body: JSON.stringify({ model: FREE_TEXT_MODEL, messages, stream }),
   });
 }
 
