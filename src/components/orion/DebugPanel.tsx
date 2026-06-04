@@ -28,7 +28,7 @@ export function DebugPanel({ open, onClose }: { open: boolean; onClose: () => vo
       sfx.tap();
     } catch (e: any) {
       sfx.error();
-      setResult("⚠️ No se pudo subir la imagen: " + e.message);
+      setResult("No se pudo subir la imagen: " + e.message);
     }
     setUploading(false);
   }
