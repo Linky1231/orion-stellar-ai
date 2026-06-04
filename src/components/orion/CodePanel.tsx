@@ -29,7 +29,7 @@ export function CodePanel({ open, onClose }: { open: boolean; onClose: () => voi
       sfx.receive();
     } catch (e: any) {
       sfx.error();
-      setResult("⚠️ " + e.message);
+      setResult("Error: " + e.message);
     }
     setRunning(false);
   }
