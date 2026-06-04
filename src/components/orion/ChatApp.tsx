@@ -253,8 +253,8 @@ export function ChatApp() {
             )}
             {(imageMode || searchMode) && (
               <div className="mb-2 flex gap-2 flex-wrap">
-                {imageMode && <Tag onClose={() => setImageMode(false)}>🎨 Modo imagen</Tag>}
-                {searchMode && <Tag onClose={() => setSearchMode(false)}>🔍 Buscar info</Tag>}
+                {imageMode && <Tag onClose={() => setImageMode(false)}><Sparkles className="w-3 h-3" /> Modo imagen</Tag>}
+                {searchMode && <Tag onClose={() => setSearchMode(false)}><Search className="w-3 h-3" /> Buscar info</Tag>}
               </div>
             )}
             <div className="glass-strong rounded-2xl border border-border shadow-soft p-2 flex items-end gap-1">
