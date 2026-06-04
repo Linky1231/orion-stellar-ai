@@ -6,7 +6,9 @@ import { classifyNote, analyzeProject } from "@/lib/orion-api";
 import { OrionLogo } from "./OrionLogo";
 import {
   X, Plus, Trash2, Save, Folder, FolderPlus, Sparkles, Brain,
-  ArrowLeft, Wand2, Loader2,
+  ArrowLeft, Wand2, Loader2, NotebookPen, Wrench,
+  Gamepad2, BookOpen, LayoutDashboard, Network, Wallet,
+  Volume2, Bug, Palette, Code, Pin, FolderInput, CheckSquare, Square,
 } from "lucide-react";
 
 type Note = {
@@ -31,21 +33,32 @@ type FolderRow = {
 };
 
 const SECTIONS = [
-  { id: "main", label: "Notas", icon: "📒" },
-  { id: "dev", label: "Desarrollo", icon: "🛠️" },
-];
+  { id: "main", label: "Notas", Icon: NotebookPen },
+  { id: "dev", label: "Desarrollo", Icon: Wrench },
+] as const;
 
 const STATUS = {
-  stable: { label: "Estable", color: "text-green-400", dot: "🟢", bg: "bg-green-500/10" },
-  development: { label: "En desarrollo", color: "text-yellow-400", dot: "🟡", bg: "bg-yellow-500/10" },
-  problematic: { label: "Problemático", color: "text-red-400", dot: "🔴", bg: "bg-red-500/10" },
-  abandoned: { label: "Abandonado", color: "text-zinc-400", dot: "⚫", bg: "bg-zinc-500/10" },
+  stable:      { label: "Estable",       color: "text-green-400",  dotClass: "bg-green-500",  bg: "bg-green-500/10" },
+  development: { label: "En desarrollo", color: "text-yellow-400", dotClass: "bg-yellow-500", bg: "bg-yellow-500/10" },
+  problematic: { label: "Problemático",  color: "text-red-400",    dotClass: "bg-red-500",    bg: "bg-red-500/10" },
+  abandoned:   { label: "Abandonado",    color: "text-zinc-400",   dotClass: "bg-zinc-500",   bg: "bg-zinc-500/10" },
 } as const;
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  gameplay: "🎮", lore: "📖", ui: "🖼️", multiplayer: "🌐", economia: "💰",
-  audio: "🔊", bugs: "🐛", arte: "🎨", programacion: "💻", otros: "📌",
+const CATEGORY_ICON: Record<string, any> = {
+  gameplay: Gamepad2, lore: BookOpen, ui: LayoutDashboard, multiplayer: Network, economia: Wallet,
+  audio: Volume2, bugs: Bug, arte: Palette, programacion: Code, otros: Pin,
 };
+
+function StatusDot({ status, className = "" }: { status: string; className?: string }) {
+  const st = STATUS[status as keyof typeof STATUS] || STATUS.development;
+  return <span className={`inline-block w-2 h-2 rounded-full ${st.dotClass} ${className}`} />;
+}
+
+function CategoryIcon({ category, className = "w-3.5 h-3.5" }: { category: string | null | undefined; className?: string }) {
+  if (!category) return null;
+  const Icon = CATEGORY_ICON[category] || Pin;
+  return <Icon className={className} />;
+}
 
 export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [folders, setFolders] = useState<FolderRow[]>([]);
@@ -56,6 +69,9 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
   const [classifying, setClassifying] = useState(false);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [moveOpen, setMoveOpen] = useState(false);
 
   async function load() {
     const did = getDeviceId();
@@ -73,6 +89,29 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
     if (activeFolder) return notes.filter((n) => n.folder_id === activeFolder.id);
     return notes.filter((n) => n.section === section && !n.folder_id);
   }, [notes, activeFolder, section]);
+
+  function toggleSelect(id: string) {
+    setSelected((s) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  }
+  function exitSelect() { setSelectMode(false); setSelected(new Set()); setMoveOpen(false); }
+
+  async function moveSelectedTo(folderId: string | null) {
+    if (selected.size === 0) return;
+    const ids = Array.from(selected);
+    const updates: any = { folder_id: folderId, last_activity: new Date().toISOString() };
+    if (folderId) {
+      const target = folders.find((f) => f.id === folderId);
+      if (target) updates.section = target.section;
+    }
+    await supabase.from("notes").update(updates).in("id", ids);
+    sfx.tap();
+    exitSelect();
+    load();
+  }
 
   async function createFolder() {
     sfx.tap();
@@ -186,15 +225,19 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
 
       {/* Section tabs */}
       <div className="border-b border-border px-3 flex gap-1">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => { sfx.tap(); setSection(s.id as any); setActiveFolder(null); setActive(null); }}
-            className={`tap px-4 py-2.5 text-sm border-b-2 transition ${section === s.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-          >
-            {s.icon} {s.label}
-          </button>
-        ))}
+        {SECTIONS.map((s) => {
+          const Icon = s.Icon;
+          const isActive = section === s.id;
+          return (
+            <button
+              key={s.id}
+              onClick={() => { sfx.tap(); setSection(s.id as any); setActiveFolder(null); setActive(null); exitSelect(); }}
+              className={`tap px-4 py-2.5 text-sm border-b-2 transition flex items-center gap-1.5 ${isActive ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            >
+              <Icon className="w-4 h-4" /> {s.label}
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex-1 flex overflow-hidden">
@@ -204,21 +247,58 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
           <div className="p-3 flex items-center gap-2 border-b border-border">
             {activeFolder ? (
               <>
-                <button onClick={() => setActiveFolder(null)} className="tap p-1 rounded hover:bg-accent"><ArrowLeft className="w-4 h-4" /></button>
+                <button onClick={() => { setActiveFolder(null); exitSelect(); }} className="tap p-1 rounded hover:bg-accent"><ArrowLeft className="w-4 h-4" /></button>
                 <span className="text-sm truncate flex items-center gap-1.5">
-                  {STATUS[activeFolder.status as keyof typeof STATUS]?.dot} {activeFolder.name}
+                  <StatusDot status={activeFolder.status} /> {activeFolder.name}
                 </span>
               </>
             ) : (
               <span className="text-sm text-muted-foreground">Carpetas y notas</span>
             )}
             <div className="ml-auto flex gap-1">
-              {!activeFolder && (
+              <button
+                onClick={() => { sfx.tap(); selectMode ? exitSelect() : setSelectMode(true); }}
+                title={selectMode ? "Cancelar selección" : "Seleccionar notas"}
+                className={`tap p-1.5 rounded-lg ${selectMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}
+              >
+                <CheckSquare className="w-4 h-4" />
+              </button>
+              {!activeFolder && !selectMode && (
                 <button onClick={createFolder} title="Nueva carpeta" className="tap p-1.5 rounded-lg hover:bg-accent"><FolderPlus className="w-4 h-4" /></button>
               )}
-              <button onClick={createNote} title="Nueva nota" className="tap p-1.5 rounded-lg bg-primary text-primary-foreground"><Plus className="w-4 h-4" /></button>
+              {!selectMode && (
+                <button onClick={createNote} title="Nueva nota" className="tap p-1.5 rounded-lg bg-primary text-primary-foreground"><Plus className="w-4 h-4" /></button>
+              )}
             </div>
           </div>
+
+          {selectMode && (
+            <div className="px-3 py-2 border-b border-border bg-accent/30 flex items-center gap-2 relative">
+              <span className="text-xs text-muted-foreground">{selected.size} seleccionada{selected.size === 1 ? "" : "s"}</span>
+              <button
+                disabled={selected.size === 0}
+                onClick={() => setMoveOpen((v) => !v)}
+                className="tap ml-auto px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs flex items-center gap-1 disabled:opacity-40"
+              >
+                <FolderInput className="w-3 h-3" /> Mover a…
+              </button>
+              {moveOpen && (
+                <div className="absolute top-full right-2 mt-1 z-10 w-56 bg-card border border-border rounded-xl shadow-soft p-1 max-h-72 overflow-y-auto">
+                  <button onClick={() => moveSelectedTo(null)} className="w-full text-left text-xs px-2.5 py-1.5 rounded-lg hover:bg-accent flex items-center gap-2">
+                    <Folder className="w-3.5 h-3.5 text-muted-foreground" /> Sin carpeta
+                  </button>
+                  {folders.length === 0 && <div className="text-[11px] text-muted-foreground px-2.5 py-2">Sin carpetas. Crea una primero.</div>}
+                  {folders.map((f) => (
+                    <button key={f.id} onClick={() => moveSelectedTo(f.id)} className="w-full text-left text-xs px-2.5 py-1.5 rounded-lg hover:bg-accent flex items-center gap-2">
+                      <Folder className="w-3.5 h-3.5" style={{ color: f.color }} />
+                      <span className="truncate">{f.name}</span>
+                      <span className="ml-auto text-[10px] text-muted-foreground">{f.section}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto p-2">
             {/* Folders grid */}
@@ -232,7 +312,7 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
                       onClick={() => { sfx.tap(); setActiveFolder(f); setActive(null); }}>
                       <div className="flex items-center gap-2">
                         <Folder className="w-5 h-5" style={{ color: f.color }} />
-                        <span className="text-xs">{st.dot}</span>
+                        <StatusDot status={f.status} />
                       </div>
                       <div className="text-sm font-medium mt-1.5 truncate">{f.name}</div>
                       <div className="text-[10px] text-muted-foreground">{count} nota{count !== 1 ? "s" : ""}</div>
@@ -258,28 +338,38 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
             {/* Notes list */}
             <div className="space-y-1">
               {visibleNotes.map((n) => {
-                const st = STATUS[n.status as keyof typeof STATUS] || STATUS.development;
+                const isSel = selected.has(n.id);
                 return (
                   <div key={n.id}
-                    onClick={() => { sfx.tap(); setActive(n); }}
-                    className={`group cursor-pointer px-3 py-2 rounded-xl flex items-start gap-2 ${active?.id === n.id ? "bg-accent" : "hover:bg-accent/60"}`}>
-                    <span className="text-xs mt-0.5">{st.dot}</span>
+                    onClick={() => {
+                      sfx.tap();
+                      if (selectMode) toggleSelect(n.id);
+                      else setActive(n);
+                    }}
+                    className={`group cursor-pointer px-3 py-2 rounded-xl flex items-start gap-2 ${(!selectMode && active?.id === n.id) || isSel ? "bg-accent" : "hover:bg-accent/60"}`}>
+                    {selectMode ? (
+                      isSel ? <CheckSquare className="w-4 h-4 mt-0.5 text-primary shrink-0" /> : <Square className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+                    ) : (
+                      <StatusDot status={n.status} className="mt-1.5" />
+                    )}
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm truncate flex items-center gap-1">
-                        {n.category && <span>{CATEGORY_EMOJI[n.category] || "📌"}</span>}
+                      <div className="text-sm truncate flex items-center gap-1.5">
+                        {n.category && <CategoryIcon category={n.category} />}
                         {n.title}
                       </div>
                       <div className="text-[10px] text-muted-foreground truncate">
                         {n.ai_summary || new Date(n.updated_at).toLocaleDateString()}
                       </div>
                     </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); if (confirm("¿Eliminar nota?")) remove(n.id); }}
-                      title="Eliminar nota"
-                      className="p-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 shrink-0"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {!selectMode && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); if (confirm("¿Eliminar nota?")) remove(n.id); }}
+                        title="Eliminar nota"
+                        className="p-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -322,11 +412,11 @@ export function NotesPanel({ open, onClose }: { open: boolean; onClose: () => vo
                   onChange={(e) => setActive({ ...active, status: e.target.value })}
                   className="text-xs bg-card border border-border rounded-lg px-2 py-1"
                 >
-                  {Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v.dot} {v.label}</option>)}
+                  {Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
                 {active.category && (
-                  <span className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary">
-                    {CATEGORY_EMOJI[active.category] || "📌"} {active.category}
+                  <span className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary flex items-center gap-1">
+                    <CategoryIcon category={active.category} className="w-3 h-3" /> {active.category}
                   </span>
                 )}
                 <button
