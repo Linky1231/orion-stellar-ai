@@ -246,8 +246,49 @@ Deno.serve(async (req) => {
         ? `${String(prompt || "imagen creativa")}. Contexto del proyecto indie del usuario: ${noteContext}. Mantén coherencia con esas notas.`
         : String(prompt || "imagen creativa");
       const cleanPrompt = encodeURIComponent(enrichedPrompt.slice(0, 1800));
-      const url = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&seed=${Date.now()}`;
-      return new Response(JSON.stringify({ imageUrl: url }), {
+
+      // Fetch image from Pollinations (with retries) and persist to Supabase storage
+      // so the URL stays valid even after the temporary generation link expires.
+      const polUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&seed=${Date.now()}`;
+      let imgBytes: Uint8Array | null = null;
+      let contentType = "image/jpeg";
+      let lastErr = "";
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const r = await fetch(polUrl, { headers: { accept: "image/*" } });
+          if (!r.ok) { lastErr = `HTTP ${r.status}`; await new Promise((res) => setTimeout(res, 1200 * (attempt + 1))); continue; }
+          const ct = r.headers.get("content-type") || "";
+          if (ct.includes("text/html") || ct.includes("application/json")) {
+            lastErr = `tipo inválido (${ct})`;
+            try { await r.body?.cancel(); } catch {}
+            await new Promise((res) => setTimeout(res, 1200 * (attempt + 1)));
+            continue;
+          }
+          contentType = ct || "image/jpeg";
+          imgBytes = new Uint8Array(await r.arrayBuffer());
+          break;
+        } catch (e) { lastErr = String(e); await new Promise((res) => setTimeout(res, 1200 * (attempt + 1))); }
+      }
+      if (!imgBytes) {
+        return new Response(JSON.stringify({ error: `No se pudo generar la imagen: ${lastErr}` }), { status: 502, headers: { ...corsHeaders, "content-type": "application/json" } });
+      }
+      const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+      const path = `generated/${crypto.randomUUID()}.${ext}`;
+      const up = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-attachments/${path}`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          "content-type": contentType,
+          "x-upsert": "false",
+        },
+        body: imgBytes,
+      });
+      if (!up.ok) {
+        const t = await up.text();
+        return new Response(JSON.stringify({ error: `No se pudo guardar la imagen: ${t}` }), { status: 500, headers: { ...corsHeaders, "content-type": "application/json" } });
+      }
+      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/chat-attachments/${path}`;
+      return new Response(JSON.stringify({ imageUrl: publicUrl }), {
         headers: { ...corsHeaders, "content-type": "application/json" },
       });
     }

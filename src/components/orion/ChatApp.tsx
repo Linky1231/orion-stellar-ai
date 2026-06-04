@@ -10,7 +10,7 @@ import { NotesPanel } from "./NotesPanel";
 import { DebugPanel } from "./DebugPanel";
 import { CodePanel } from "./CodePanel";
 import { AdminPanel } from "./AdminPanel";
-import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X } from "lucide-react";
+import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X, AlertTriangle, Sparkles } from "lucide-react";
 
 const SpeechCtx = createContext<{ speakingId: string | null; toggle: (id: string, text: string) => void }>({ speakingId: null, toggle: () => {} });
 
@@ -101,14 +101,14 @@ export function ChatApp() {
         const url = await generateImage(text);
         const { data: a } = await supabase.from("messages").insert({
           conversation_id: id, role: "assistant",
-          content: `Aquí tienes tu imagen ✨`,
+          content: `Aquí tienes tu imagen`,
           attachments: [{ url, type: "image/png", name: "generated.png" }],
         }).select().single();
         if (a) setMessages((m) => m.map(x => x.id === tempId ? (a as DBMsg) : x));
         sfx.receive();
       } catch (e: any) {
         sfx.error();
-        setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: "⚠️ Error generando imagen: " + e.message } : x));
+        setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: "Error generando imagen: " + e.message } : x));
       }
       setStreaming(false);
       setImageMode(false);
@@ -154,7 +154,7 @@ export function ChatApp() {
       await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", id);
     } catch (e: any) {
       sfx.error();
-      setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: "⚠️ " + e.message } : x));
+      setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: "Error: " + e.message } : x));
     }
     setStreaming(false);
     setSearchMode(false);
@@ -253,8 +253,8 @@ export function ChatApp() {
             )}
             {(imageMode || searchMode) && (
               <div className="mb-2 flex gap-2 flex-wrap">
-                {imageMode && <Tag onClose={() => setImageMode(false)}>🎨 Modo imagen</Tag>}
-                {searchMode && <Tag onClose={() => setSearchMode(false)}>🔍 Buscar info</Tag>}
+                {imageMode && <Tag onClose={() => setImageMode(false)}><Sparkles className="w-3 h-3" /> Modo imagen</Tag>}
+                {searchMode && <Tag onClose={() => setSearchMode(false)}><Search className="w-3 h-3" /> Buscar info</Tag>}
               </div>
             )}
             <div className="glass-strong rounded-2xl border border-border shadow-soft p-2 flex items-end gap-1">
