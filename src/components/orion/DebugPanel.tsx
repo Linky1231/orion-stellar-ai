@@ -47,7 +47,7 @@ export function DebugPanel({ open, onClose }: { open: boolean; onClose: () => vo
       sfx.receive();
     } catch (e: any) {
       sfx.error();
-      setResult("⚠️ " + e.message);
+      setResult("Error: " + e.message);
     }
     setAnalyzing(false);
   }
