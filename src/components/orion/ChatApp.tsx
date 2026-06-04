@@ -108,7 +108,7 @@ export function ChatApp() {
         sfx.receive();
       } catch (e: any) {
         sfx.error();
-        setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: "⚠️ Error generando imagen: " + e.message } : x));
+        setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: "Error generando imagen: " + e.message } : x));
       }
       setStreaming(false);
       setImageMode(false);
