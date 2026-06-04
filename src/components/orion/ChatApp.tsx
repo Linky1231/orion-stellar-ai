@@ -101,7 +101,7 @@ export function ChatApp() {
         const url = await generateImage(text);
         const { data: a } = await supabase.from("messages").insert({
           conversation_id: id, role: "assistant",
-          content: `Aquí tienes tu imagen ✨`,
+          content: `Aquí tienes tu imagen`,
           attachments: [{ url, type: "image/png", name: "generated.png" }],
         }).select().single();
         if (a) setMessages((m) => m.map(x => x.id === tempId ? (a as DBMsg) : x));
