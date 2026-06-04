@@ -154,7 +154,7 @@ export function ChatApp() {
       await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", id);
     } catch (e: any) {
       sfx.error();
-      setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: "⚠️ " + e.message } : x));
+      setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: "Error: " + e.message } : x));
     }
     setStreaming(false);
     setSearchMode(false);
