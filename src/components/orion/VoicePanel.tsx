@@ -88,11 +88,14 @@ export function VoicePanel({ open, onClose }: { open: boolean; onClose: () => vo
   }, []);
 
   const listen = useCallback((): Promise<string> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const r = recogRef.current;
-      if (!r) return resolve("");
+      if (!r) return reject(new Error("Reconocimiento de voz no disponible en este navegador. Usa Chrome en Android o un PC."));
       let finalText = "";
       let interim = "";
+      let settled = false;
+      const done = (v: string) => { if (!settled) { settled = true; resolve(v); } };
+      const fail = (e: Error) => { if (!settled) { settled = true; reject(e); } };
       r.onresult = (e: any) => {
         interim = "";
         for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -103,11 +106,18 @@ export function VoicePanel({ open, onClose }: { open: boolean; onClose: () => vo
         setTranscript((finalText + " " + interim).trim());
       };
       r.onerror = (e: any) => {
-        if (e.error === "no-speech" || e.error === "aborted") resolve(finalText.trim());
-        else { setError("Error de micrófono: " + e.error); resolve(finalText.trim()); }
+        const err = e?.error || "";
+        if (err === "no-speech" || err === "aborted") return done(finalText.trim());
+        if (err === "not-allowed" || err === "service-not-allowed")
+          return fail(new Error("El navegador no permite reconocimiento de voz. En iPhone/Safari no está disponible; usa Chrome en Android o un PC."));
+        if (err === "audio-capture") return fail(new Error("No se detecta micrófono."));
+        if (err === "network") return fail(new Error("Sin conexión para reconocimiento de voz."));
+        return fail(new Error("Error de micrófono: " + err));
       };
-      r.onend = () => resolve(finalText.trim());
-      try { r.start(); } catch {}
+      r.onend = () => done(finalText.trim());
+      try { r.start(); } catch (err: any) {
+        fail(new Error("No se pudo iniciar el micrófono: " + (err?.message || "")));
+      }
     });
   }, []);
 
