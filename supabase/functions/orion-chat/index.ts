@@ -13,6 +13,12 @@ const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 const FREE_AI_URL = "https://text.pollinations.ai/openai";
 const FREE_TEXT_MODEL = "openai-fast";
 
+function supabaseAdminHeaders(extra: Record<string, string> = {}) {
+  const headers: Record<string, string> = { apikey: SUPABASE_SERVICE_ROLE_KEY, ...extra };
+  if (SUPABASE_SERVICE_ROLE_KEY.split(".").length === 3) headers.authorization = `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
+  return headers;
+}
+
 const DEBUG_PROMPT = `Estás en MODO DEBUG VISUAL. Analiza la captura real del videojuego indie con precisión profesional como directora de arte + UX lead.
 
 Detecta problemas visibles de UI/UX, HUD, contraste, alineación, márgenes, gameplay visual, pulido, arte, cámara, combate, menús, rendimiento aparente, diseño de niveles, profesionalismo y placeholders.
@@ -207,12 +213,10 @@ function stripReasoningStream(body: ReadableStream<Uint8Array> | null) {
 async function sb(path: string, init: RequestInit = {}) {
   return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...init,
-    headers: {
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    headers: supabaseAdminHeaders({
       "content-type": "application/json",
       ...(init.headers || {}),
-    },
+    } as Record<string, string>),
   });
 }
 
