@@ -55,10 +55,14 @@ export function VoicePanel({ open, onClose }: { open: boolean; onClose: () => vo
     return () => window.speechSynthesis.removeEventListener?.("voiceschanged", refresh);
   }, []);
 
-  // Setup SpeechRecognition
+  // Setup SpeechRecognition. iOS Safari exposes webkitSpeechRecognition but
+  // it does NOT work — it always errors with service-not-allowed. Treat as unsupported.
   useEffect(() => {
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && (navigator as any).maxTouchPoints > 1);
+    const isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(ua);
     const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { setSupported(false); return; }
+    if (!SR || isIOS || isSafari) { setSupported(false); return; }
     const r = new SR();
     r.lang = "es-ES";
     r.continuous = false;
@@ -88,11 +92,14 @@ export function VoicePanel({ open, onClose }: { open: boolean; onClose: () => vo
   }, []);
 
   const listen = useCallback((): Promise<string> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const r = recogRef.current;
-      if (!r) return resolve("");
+      if (!r) return reject(new Error("Reconocimiento de voz no disponible en este navegador. Usa Chrome en Android o un PC."));
       let finalText = "";
       let interim = "";
+      let settled = false;
+      const done = (v: string) => { if (!settled) { settled = true; resolve(v); } };
+      const fail = (e: Error) => { if (!settled) { settled = true; reject(e); } };
       r.onresult = (e: any) => {
         interim = "";
         for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -103,11 +110,18 @@ export function VoicePanel({ open, onClose }: { open: boolean; onClose: () => vo
         setTranscript((finalText + " " + interim).trim());
       };
       r.onerror = (e: any) => {
-        if (e.error === "no-speech" || e.error === "aborted") resolve(finalText.trim());
-        else { setError("Error de micrófono: " + e.error); resolve(finalText.trim()); }
+        const err = e?.error || "";
+        if (err === "no-speech" || err === "aborted") return done(finalText.trim());
+        if (err === "not-allowed" || err === "service-not-allowed")
+          return fail(new Error("El navegador no permite reconocimiento de voz. En iPhone/Safari no está disponible; usa Chrome en Android o un PC."));
+        if (err === "audio-capture") return fail(new Error("No se detecta micrófono."));
+        if (err === "network") return fail(new Error("Sin conexión para reconocimiento de voz."));
+        return fail(new Error("Error de micrófono: " + err));
       };
-      r.onend = () => resolve(finalText.trim());
-      try { r.start(); } catch {}
+      r.onend = () => done(finalText.trim());
+      try { r.start(); } catch (err: any) {
+        fail(new Error("No se pudo iniciar el micrófono: " + (err?.message || "")));
+      }
     });
   }, []);
 
@@ -146,6 +160,7 @@ export function VoicePanel({ open, onClose }: { open: boolean; onClose: () => vo
       loop();
     } catch (e: any) {
       setError(e?.message || "Error en conversación");
+      activeRef.current = false;
       setState("idle");
     }
   }, [listen, speak]);
@@ -206,8 +221,8 @@ export function VoicePanel({ open, onClose }: { open: boolean; onClose: () => vo
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
         {!supported && (
-          <div className="text-sm text-destructive text-center max-w-sm">
-            Tu navegador no soporta reconocimiento de voz. Prueba Chrome o Edge.
+          <div className="text-sm text-destructive text-center max-w-sm px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/30">
+            El reconocimiento de voz en vivo no está disponible en este navegador (Safari/iOS no lo soportan). Usa <strong>Chrome</strong> o <strong>Edge</strong> en Android, Windows o Mac.
           </div>
         )}
 
