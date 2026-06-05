@@ -127,6 +127,12 @@ export function Sidebar({
           >
             <Code2 className="w-4 h-4 text-primary" /> Modo Code
           </button>
+          <button
+            onClick={() => { sfx.open(); onOpenVoice(); }}
+            className="w-full tap flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card hover:bg-accent border border-border text-sm"
+          >
+            <Mic className="w-4 h-4 text-primary" /> Modo Voz
+          </button>
         </div>
 
         <div className="px-3 pb-2">
