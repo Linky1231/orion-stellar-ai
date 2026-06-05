@@ -221,8 +221,8 @@ export function VoicePanel({ open, onClose }: { open: boolean; onClose: () => vo
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
         {!supported && (
-          <div className="text-sm text-destructive text-center max-w-sm">
-            Tu navegador no soporta reconocimiento de voz. Prueba Chrome o Edge.
+          <div className="text-sm text-destructive text-center max-w-sm px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/30">
+            El reconocimiento de voz en vivo no está disponible en este navegador (Safari/iOS no lo soportan). Usa <strong>Chrome</strong> o <strong>Edge</strong> en Android, Windows o Mac.
           </div>
         )}
 
