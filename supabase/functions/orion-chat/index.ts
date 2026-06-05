@@ -221,6 +221,32 @@ async function safeJson(r: Response) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
+function base64ToBytes(b64: string) {
+  const bin = atob(b64.includes(",") ? b64.split(",").pop() || "" : b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+function findImageBase64(value: any): string | null {
+  if (!value || typeof value !== "object") return null;
+  if (typeof value.b64_json === "string" && value.b64_json.length > 100) return value.b64_json;
+  if (typeof value.image_url?.url === "string" && value.image_url.url.startsWith("data:image/")) return value.image_url.url;
+  if (typeof value.url === "string" && value.url.startsWith("data:image/")) return value.url;
+  for (const child of Object.values(value)) {
+    if (Array.isArray(child)) {
+      for (const item of child) {
+        const found = findImageBase64(item);
+        if (found) return found;
+      }
+    } else if (child && typeof child === "object") {
+      const found = findImageBase64(child);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 async function aiJSON(messages: any[], schema: any, name: string, _model = FREE_TEXT_MODEL) {
   const r = await freeAI([
     { role: "system", content: `Devuelve únicamente JSON válido para la función ${name}, sin markdown ni explicación. Esquema esperado: ${JSON.stringify(schema)}` },
