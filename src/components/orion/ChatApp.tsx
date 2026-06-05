@@ -9,7 +9,6 @@ import { Sidebar } from "./Sidebar";
 import { NotesPanel } from "./NotesPanel";
 import { DebugPanel } from "./DebugPanel";
 import { CodePanel } from "./CodePanel";
-import { VoicePanel } from "./VoicePanel";
 import { AdminPanel } from "./AdminPanel";
 import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X, AlertTriangle, Sparkles } from "lucide-react";
 
@@ -27,7 +26,6 @@ export function ChatApp() {
   const [notesOpen, setNotesOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);
-  const [voiceOpen, setVoiceOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [convId, setConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DBMsg[]>([]);
@@ -203,7 +201,6 @@ export function ChatApp() {
         onOpenNotes={() => setNotesOpen(true)}
         onOpenDebug={() => setDebugOpen(true)}
         onOpenCode={() => setCodeOpen(true)}
-        onOpenVoice={() => setVoiceOpen(true)}
         onCreateImage={() => { newConv(); setImageMode(true); }}
       />
 
@@ -287,7 +284,6 @@ export function ChatApp() {
       <NotesPanel open={notesOpen} onClose={() => setNotesOpen(false)} />
       <DebugPanel open={debugOpen} onClose={() => setDebugOpen(false)} />
       <CodePanel open={codeOpen} onClose={() => setCodeOpen(false)} />
-      <VoicePanel open={voiceOpen} onClose={() => setVoiceOpen(false)} />
       <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
     </div>
     </SpeechCtx.Provider>
