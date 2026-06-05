@@ -55,10 +55,14 @@ export function VoicePanel({ open, onClose }: { open: boolean; onClose: () => vo
     return () => window.speechSynthesis.removeEventListener?.("voiceschanged", refresh);
   }, []);
 
-  // Setup SpeechRecognition
+  // Setup SpeechRecognition. iOS Safari exposes webkitSpeechRecognition but
+  // it does NOT work — it always errors with service-not-allowed. Treat as unsupported.
   useEffect(() => {
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && (navigator as any).maxTouchPoints > 1);
+    const isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(ua);
     const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { setSupported(false); return; }
+    if (!SR || isIOS || isSafari) { setSupported(false); return; }
     const r = new SR();
     r.lang = "es-ES";
     r.continuous = false;
