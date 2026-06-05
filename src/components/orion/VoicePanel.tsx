@@ -160,6 +160,7 @@ export function VoicePanel({ open, onClose }: { open: boolean; onClose: () => vo
       loop();
     } catch (e: any) {
       setError(e?.message || "Error en conversación");
+      activeRef.current = false;
       setState("idle");
     }
   }, [listen, speak]);
