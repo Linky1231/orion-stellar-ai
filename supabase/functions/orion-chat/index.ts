@@ -349,11 +349,10 @@ Deno.serve(async (req) => {
       const path = `generated/${crypto.randomUUID()}.${ext}`;
       const up = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-attachments/${path}`, {
         method: "POST",
-        headers: {
-          authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        headers: supabaseAdminHeaders({
           "content-type": contentType,
           "x-upsert": "false",
-        },
+        }),
         body: imgBytes,
       });
       if (!up.ok) {
