@@ -247,28 +247,61 @@ Deno.serve(async (req) => {
         : String(prompt || "imagen creativa");
       const cleanPrompt = encodeURIComponent(enrichedPrompt.slice(0, 1800));
 
-      // Fetch image from Pollinations (with retries) and persist to Supabase storage
-      // so the URL stays valid even after the temporary generation link expires.
-      const polUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&seed=${Date.now()}`;
+      // Fetch image from Pollinations (with retries) and persist to Supabase storage.
+      const polToken = Deno.env.get("POLLINATIONS_TOKEN") || "";
+      const polRef = polToken ? `&token=${encodeURIComponent(polToken)}` : "&referrer=orion-estellar.lovable.app";
+      const polUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&seed=${Date.now()}${polRef}`;
       let imgBytes: Uint8Array | null = null;
       let contentType = "image/jpeg";
       let lastErr = "";
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          const r = await fetch(polUrl, { headers: { accept: "image/*" } });
-          if (!r.ok) { lastErr = `HTTP ${r.status}`; await new Promise((res) => setTimeout(res, 1200 * (attempt + 1))); continue; }
+          const r = await fetch(polUrl, { headers: { accept: "image/*", referer: "https://orion-estellar.lovable.app" } });
+          if (!r.ok) { lastErr = `HTTP ${r.status}`; await new Promise((res) => setTimeout(res, 800 * (attempt + 1))); continue; }
           const ct = r.headers.get("content-type") || "";
           if (ct.includes("text/html") || ct.includes("application/json")) {
             lastErr = `tipo inválido (${ct})`;
             try { await r.body?.cancel(); } catch {}
-            await new Promise((res) => setTimeout(res, 1200 * (attempt + 1)));
             continue;
           }
           contentType = ct || "image/jpeg";
           imgBytes = new Uint8Array(await r.arrayBuffer());
           break;
-        } catch (e) { lastErr = String(e); await new Promise((res) => setTimeout(res, 1200 * (attempt + 1))); }
+        } catch (e) { lastErr = String(e); }
       }
+
+      // Fallback: Lovable AI Gateway image generation (uses LOVABLE_API_KEY).
+      if (!imgBytes) {
+        const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+        if (lovableKey) {
+          try {
+            const gw = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+              method: "POST",
+              headers: { "content-type": "application/json", authorization: `Bearer ${lovableKey}` },
+              body: JSON.stringify({
+                model: "google/gemini-2.5-flash-image",
+                prompt: enrichedPrompt.slice(0, 1800),
+                size: "1024x1024",
+                n: 1,
+              }),
+            });
+            if (gw.ok) {
+              const j = await gw.json();
+              const b64 = j?.data?.[0]?.b64_json;
+              if (b64) {
+                const bin = atob(b64);
+                const arr = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                imgBytes = arr;
+                contentType = "image/png";
+              } else { lastErr += " | gateway: sin imagen"; }
+            } else {
+              lastErr += ` | gateway HTTP ${gw.status}`;
+            }
+          } catch (e) { lastErr += ` | gateway error: ${String(e)}`; }
+        }
+      }
+
       if (!imgBytes) {
         return new Response(JSON.stringify({ error: `No se pudo generar la imagen: ${lastErr}` }), { status: 502, headers: { ...corsHeaders, "content-type": "application/json" } });
       }
