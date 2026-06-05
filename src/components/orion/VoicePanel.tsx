@@ -150,11 +150,21 @@ export function VoicePanel({ open, onClose }: { open: boolean; onClose: () => vo
     }
   }, [listen, speak]);
 
-  const start = useCallback(() => {
+  const start = useCallback(async () => {
     setError(null);
+    // Request mic permission explicitly — required on iOS/Safari or
+    // SpeechRecognition fails with "service-not-allowed".
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop());
+    } catch {
+      setError(
+        "Permiso de micrófono denegado. En iPhone: Ajustes → Safari → Micrófono → Permitir. Nota: el reconocimiento de voz en iOS Safari es limitado; usa Chrome en Android o un PC para mejor experiencia."
+      );
+      return;
+    }
     activeRef.current = true;
     sfx.open();
-    // Greeting
     setState("speaking");
     setReply("Hola, soy Orión. ¿En qué puedo ayudarte?");
     speak("Hola, soy Orión. ¿En qué puedo ayudarte?").then(() => {
