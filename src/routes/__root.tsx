@@ -82,8 +82,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "Lovable App" },
       { name: "twitter:description", content: "Orión Estellar AI is an intelligent assistant that generates text, images, and analyzes content." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/b776bea1-8f74-451a-a988-9cc2e727675f/id-preview-341935ae--58f0d4aa-2adf-4759-a426-8ad8582d9d75.lovable.app-1778546864017.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/b776bea1-8f74-451a-a988-9cc2e727675f/id-preview-341935ae--58f0d4aa-2adf-4759-a426-8ad8582d9d75.lovable.app-1778546864017.png" },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/x1KeAJt1kyLLzYAIv0ZfzKnC22H3/social-images/social-1780687123251-Borcelle.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/x1KeAJt1kyLLzYAIv0ZfzKnC22H3/social-images/social-1780687123251-Borcelle.webp" },
     ],
     links: [
       {
