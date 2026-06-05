@@ -13,6 +13,12 @@ const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 const FREE_AI_URL = "https://text.pollinations.ai/openai";
 const FREE_TEXT_MODEL = "openai-fast";
 
+function supabaseAdminHeaders(extra: Record<string, string> = {}) {
+  const headers: Record<string, string> = { apikey: SUPABASE_SERVICE_ROLE_KEY, ...extra };
+  if (SUPABASE_SERVICE_ROLE_KEY.split(".").length === 3) headers.authorization = `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
+  return headers;
+}
+
 const DEBUG_PROMPT = `Estás en MODO DEBUG VISUAL. Analiza la captura real del videojuego indie con precisión profesional como directora de arte + UX lead.
 
 Detecta problemas visibles de UI/UX, HUD, contraste, alineación, márgenes, gameplay visual, pulido, arte, cámara, combate, menús, rendimiento aparente, diseño de niveles, profesionalismo y placeholders.
@@ -207,18 +213,42 @@ function stripReasoningStream(body: ReadableStream<Uint8Array> | null) {
 async function sb(path: string, init: RequestInit = {}) {
   return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...init,
-    headers: {
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    headers: supabaseAdminHeaders({
       "content-type": "application/json",
       ...(init.headers || {}),
-    },
+    } as Record<string, string>),
   });
 }
 
 async function safeJson(r: Response) {
   const text = await r.text();
   try { return JSON.parse(text); } catch { return null; }
+}
+
+function base64ToBytes(b64: string) {
+  const bin = atob(b64.includes(",") ? b64.split(",").pop() || "" : b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+function findImageBase64(value: any): string | null {
+  if (!value || typeof value !== "object") return null;
+  if (typeof value.b64_json === "string" && value.b64_json.length > 100) return value.b64_json;
+  if (typeof value.image_url?.url === "string" && value.image_url.url.startsWith("data:image/")) return value.image_url.url;
+  if (typeof value.url === "string" && value.url.startsWith("data:image/")) return value.url;
+  for (const child of Object.values(value)) {
+    if (Array.isArray(child)) {
+      for (const item of child) {
+        const found = findImageBase64(item);
+        if (found) return found;
+      }
+    } else if (child && typeof child === "object") {
+      const found = findImageBase64(child);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 async function aiJSON(messages: any[], schema: any, name: string, _model = FREE_TEXT_MODEL) {
@@ -257,7 +287,12 @@ Deno.serve(async (req) => {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           const r = await fetch(polUrl, { headers: { accept: "image/*", referer: "https://orion-estellar.lovable.app" } });
-          if (!r.ok) { lastErr = `HTTP ${r.status}`; await new Promise((res) => setTimeout(res, 800 * (attempt + 1))); continue; }
+          if (!r.ok) {
+            const errorText = await r.text().catch(() => "");
+            lastErr = `Pollinations HTTP ${r.status}${errorText ? `: ${errorText.slice(0, 180)}` : ""}`;
+            if (r.status >= 500 || r.status === 429) await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
+            break;
+          }
           const ct = r.headers.get("content-type") || "";
           if (ct.includes("text/html") || ct.includes("application/json")) {
             lastErr = `tipo inválido (${ct})`;
@@ -277,43 +312,47 @@ Deno.serve(async (req) => {
           try {
             const gw = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
               method: "POST",
-              headers: { "content-type": "application/json", authorization: `Bearer ${lovableKey}` },
+              headers: { "content-type": "application/json", "Lovable-API-Key": lovableKey },
               body: JSON.stringify({
-                model: "google/gemini-2.5-flash-image",
+                model: "openai/gpt-image-2",
                 prompt: enrichedPrompt.slice(0, 1800),
+                quality: "low",
                 size: "1024x1024",
                 n: 1,
               }),
             });
             if (gw.ok) {
               const j = await gw.json();
-              const b64 = j?.data?.[0]?.b64_json;
+              const b64 = findImageBase64(j);
               if (b64) {
-                const bin = atob(b64);
-                const arr = new Uint8Array(bin.length);
-                for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-                imgBytes = arr;
+                imgBytes = base64ToBytes(b64);
                 contentType = "image/png";
               } else { lastErr += " | gateway: sin imagen"; }
             } else {
-              lastErr += ` | gateway HTTP ${gw.status}`;
+              const gwText = await gw.text().catch(() => "");
+              lastErr += ` | gateway HTTP ${gw.status}${gwText ? `: ${gwText.slice(0, 180)}` : ""}`;
             }
           } catch (e) { lastErr += ` | gateway error: ${String(e)}`; }
         }
       }
 
       if (!imgBytes) {
-        return new Response(JSON.stringify({ error: `No se pudo generar la imagen: ${lastErr}` }), { status: 502, headers: { ...corsHeaders, "content-type": "application/json" } });
+        return new Response(JSON.stringify({
+          error: "IMAGE_GENERATION_UNAVAILABLE",
+          message: lastErr.includes("402")
+            ? "El proveedor gratuito de imágenes rechazó la petición y el generador alternativo no devolvió una imagen. Intenta de nuevo con una descripción más concreta o espera unos minutos."
+            : `No se pudo generar la imagen: ${lastErr}`,
+          fallback: true,
+        }), { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } });
       }
       const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
       const path = `generated/${crypto.randomUUID()}.${ext}`;
       const up = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-attachments/${path}`, {
         method: "POST",
-        headers: {
-          authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        headers: supabaseAdminHeaders({
           "content-type": contentType,
           "x-upsert": "false",
-        },
+        }),
         body: imgBytes,
       });
       if (!up.ok) {
