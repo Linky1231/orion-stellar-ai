@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
-import { Search, Plus, Trash2, Pencil, MessageSquare, StickyNote, X, ImagePlus, Bug, Code2 } from "lucide-react";
+import { Search, Plus, Trash2, Pencil, MessageSquare, StickyNote, X, ImagePlus, Bug, Code2, Mic } from "lucide-react";
 import { OrionLogo } from "./OrionLogo";
 
 type Conv = { id: string; title: string; updated_at: string };
@@ -16,6 +16,7 @@ export function Sidebar({
   onOpenNotes,
   onOpenDebug,
   onOpenCode,
+  onOpenVoice,
   onCreateImage,
 }: {
   open: boolean;
@@ -26,6 +27,7 @@ export function Sidebar({
   onOpenNotes: () => void;
   onOpenDebug: () => void;
   onOpenCode: () => void;
+  onOpenVoice: () => void;
   onCreateImage: () => void;
 }) {
   const [convs, setConvs] = useState<Conv[]>([]);
@@ -124,6 +126,12 @@ export function Sidebar({
             className="w-full tap flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card hover:bg-accent border border-border text-sm"
           >
             <Code2 className="w-4 h-4 text-primary" /> Modo Code
+          </button>
+          <button
+            onClick={() => { sfx.open(); onOpenVoice(); }}
+            className="w-full tap flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card hover:bg-accent border border-border text-sm"
+          >
+            <Mic className="w-4 h-4 text-primary" /> Modo Voz
           </button>
         </div>
 
