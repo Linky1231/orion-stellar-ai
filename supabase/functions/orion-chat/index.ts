@@ -129,19 +129,23 @@ async function stableHordeJSON(messages: any[]) {
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false): Promise<Response> {
-  // Use the public Stable Horde text pool first; Pollinations often rate-limits anonymous traffic.
+  // Try Pollinations first (fast, streams). Fallback to Stable Horde only if it fails.
+  for (const model of [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL]) {
+    const r = await fetchWithTimeout(FREE_AI_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
+      body: JSON.stringify({ model, messages, stream, ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
+    }, 9000).catch(() => null);
+    if (r?.ok) return r;
+    if (r) { try { await r.body?.cancel(); } catch { /* ignore */ } }
+  }
+  // Last resort: Stable Horde (slow but resilient)
   try {
     const text = jsonMode ? JSON.stringify(await stableHordeJSON(messages)) : await stableHordeText(messages);
     return textResponseAsAI(text, stream, jsonMode);
   } catch (e) {
-    console.error("stable horde text fallback failed", String(e));
-    const r = await fetchWithTimeout(FREE_AI_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
-      body: JSON.stringify({ model: FREE_TEXT_FALLBACK_MODEL, messages, stream, ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
-    }, 8000).catch(() => null);
-    if (r?.ok) return r;
-    return aiErrorResponse(r?.status || 429, r ? await r.text().catch(() => "queue full") : "queue full", stream);
+    console.error("all text providers failed", String(e));
+    return aiErrorResponse(429, "queue full", stream);
   }
 }
 

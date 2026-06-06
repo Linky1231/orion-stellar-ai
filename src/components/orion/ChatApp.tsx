@@ -313,6 +313,8 @@ function Welcome({ imageMode }: { imageMode: boolean }) {
 
 function Bubble({ m }: { m: DBMsg }) {
   const isUser = m.role === "user";
+  const hasAttachments = (m.attachments || []).length > 0;
+  if (!isUser && !m.content?.trim() && !hasAttachments) return null;
   return (
     <div className={`flex gap-3 animate-fade-up ${isUser ? "flex-row-reverse" : ""}`}>
       <div className="shrink-0">
