@@ -61,6 +61,29 @@ function quickFallback(stream: boolean) {
   return textResponseAsAI("Ahora mismo el servicio está lento. Intenta otra vez en unos segundos.", stream);
 }
 
+async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, maxTokens: number) {
+  const key = Deno.env.get("LOVABLE_API_KEY");
+  if (!key) return null;
+  try {
+    const gateway = createOpenAICompatible({
+      name: "lovable",
+      baseURL: "https://ai.gateway.lovable.dev/v1",
+      headers: { "Lovable-API-Key": key },
+    });
+    const result = await generateText({
+      model: gateway(LOVABLE_TEXT_MODEL),
+      messages,
+      maxOutputTokens: Math.min(maxTokens, 250),
+      temperature: 0.6,
+    });
+    const text = jsonMode ? result.text : result.text.slice(0, 600);
+    return textResponseAsAI(text, stream, jsonMode);
+  } catch (e) {
+    console.error("lovable ai failed", String(e));
+    return null;
+  }
+}
+
 function messagesToPrompt(messages: any[]) {
   const normalized = (messages || []).map((m: any) => {
     const role = m.role === "assistant" ? "assistant" : m.role === "system" ? "system" : "user";
@@ -136,16 +159,8 @@ async function stableHordeJSON(messages: any[]) {
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
-  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-  if (lovableKey) {
-    const r = await fetchWithTimeout(LOVABLE_AI_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json", "Lovable-API-Key": lovableKey },
-      body: JSON.stringify({ model: LOVABLE_TEXT_MODEL, messages, stream, max_tokens: Math.min(maxTokens, 250), ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
-    }, stream ? 25000 : 18000).catch(() => null);
-    if (r?.ok) return r;
-    if (r) { try { await r.body?.cancel(); } catch { /* ignore */ } }
-  }
+  const lovable = await lovableAI(messages, stream, jsonMode, maxTokens);
+  if (lovable) return lovable;
 
   // Public fallback: keep timeouts short so the UI never waits forever.
   for (const model of [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL]) {
