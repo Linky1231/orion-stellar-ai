@@ -79,7 +79,12 @@ async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, ma
     const text = jsonMode ? result.text : result.text.slice(0, 600);
     return textResponseAsAI(text, stream, jsonMode);
   } catch (e) {
-    console.error("lovable ai failed", String(e));
+    const message = String(e);
+    if (message.includes("Payment Required")) {
+      console.error("lovable ai credits exhausted");
+      return textResponseAsAI("La IA estable no tiene créditos disponibles ahora. Recarga créditos o inténtalo más tarde.", stream, jsonMode);
+    }
+    console.error("lovable ai failed", message);
     return null;
   }
 }
