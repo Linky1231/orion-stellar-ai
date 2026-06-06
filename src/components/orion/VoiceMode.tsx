@@ -76,10 +76,34 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
     return out.join(" ");
   };
 
+  const inactivityTimerRef = useRef<number | null>(null);
+  const INACTIVITY_MS = 17000;
+
+  const clearInactivity = () => {
+    if (inactivityTimerRef.current) {
+      window.clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = null;
+    }
+  };
+  const armInactivity = () => {
+    clearInactivity();
+    inactivityTimerRef.current = window.setTimeout(() => {
+      shouldListenRef.current = false;
+      try { recogRef.current?.abort?.(); } catch {}
+      window.speechSynthesis.cancel();
+      setError("Sin actividad durante 17s. Modo voz pausado.");
+      setState("idle");
+    }, INACTIVITY_MS);
+  };
+
   const startRecognition = useCallback(() => {
     const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) { setError("Reconocimiento de voz no soportado en este navegador."); return; }
-    try { recogRef.current?.abort?.(); } catch {}
+    // Evita múltiples instancias activas del micrófono
+    if (recogRef.current) {
+      try { recogRef.current.abort?.(); } catch {}
+      recogRef.current = null;
+    }
     const r = new SR();
     r.lang = "es-ES";
     r.continuous = true;
@@ -89,7 +113,6 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
     setTranscript("");
 
     r.onresult = (ev: any) => {
-      // Interrupt Orion when user speaks
       if (stateRef.current === "speaking") {
         window.speechSynthesis.cancel();
         setReply("");
@@ -98,14 +121,17 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
       if (processingRef.current || stateRef.current === "thinking") return;
 
       let interim = "";
+      let gotFinal = false;
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         const res = ev.results[i];
         const t = res[0].transcript;
-        if (res.isFinal) finalBufRef.current = dedupWords((finalBufRef.current + " " + t).trim());
+        if (res.isFinal) { finalBufRef.current = dedupWords((finalBufRef.current + " " + t).trim()); gotFinal = true; }
         else interim += t + " ";
       }
       const combined = dedupWords((finalBufRef.current + " " + interim).trim());
       setTranscript(combined);
+
+      if (combined.length > 0 || gotFinal) armInactivity();
 
       if (silenceTimerRef.current) window.clearTimeout(silenceTimerRef.current);
       if (combined.length > 0) {
@@ -119,16 +145,17 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         setError("Permiso de micrófono denegado.");
         shouldListenRef.current = false;
+        clearInactivity();
         setState("idle");
       }
     };
     r.onend = () => {
-      if (shouldListenRef.current && !processingRef.current) {
+      if (shouldListenRef.current && !processingRef.current && recogRef.current === r) {
         try { r.start(); } catch {}
       }
     };
     recogRef.current = r;
-    try { r.start(); setState("listening"); } catch {}
+    try { r.start(); setState("listening"); armInactivity(); } catch {}
   }, []);
 
   const stopRecognition = useCallback(() => {
@@ -137,6 +164,7 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
     try { recogRef.current?.stop?.(); } catch {}
     recogRef.current = null;
     if (silenceTimerRef.current) { window.clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
+    clearInactivity();
   }, []);
 
   const resumeListening = useCallback(() => {
@@ -145,7 +173,6 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
     shouldListenRef.current = true;
     processingRef.current = false;
     setState("listening");
-    // Recreate to fully reset state
     startRecognition();
   }, [startRecognition]);
 
