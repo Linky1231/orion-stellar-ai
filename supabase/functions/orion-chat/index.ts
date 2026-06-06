@@ -72,7 +72,10 @@ function messagesToPrompt(messages: any[]) {
 }
 
 function textResponseAsAI(text: string, stream: boolean, _jsonMode = false) {
-  const clean = text.replace(/<\|im_end\|>/g, "").trim();
+  const clean = text
+    .split(/<\|im_start\|>|<\|im_end\|>|\n\s*(system|user|assistant)\s*\n/i)[0]
+    .replace(/<\|[^>]+\|>/g, "")
+    .trim() || "Estoy lista. ¿En qué te ayudo?";
   if (stream) {
     const encoder = new TextEncoder();
     return new Response(new ReadableStream({
