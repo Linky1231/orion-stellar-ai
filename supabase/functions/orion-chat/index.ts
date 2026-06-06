@@ -59,7 +59,7 @@ async function freeAI(messages: any[], stream = false, jsonMode = false): Promis
       body: JSON.stringify({ model, messages, stream, ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
     }, 10000).catch(() => null);
     if (!r) continue;
-    if (r.status !== 429) return r;
+    if (r.ok) return r;
     lastFreeResponse = r.clone();
     try { await r.body?.cancel(); } catch { /* ignore */ }
     await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
