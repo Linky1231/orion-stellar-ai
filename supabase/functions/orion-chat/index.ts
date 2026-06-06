@@ -12,6 +12,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 const FREE_AI_URL = "https://text.pollinations.ai/openai";
 const FREE_TEXT_MODEL = "openai-fast";
+const FREE_TEXT_FALLBACK_MODEL = "openai";
 
 function supabaseAdminHeaders(extra: Record<string, string> = {}) {
   const headers: Record<string, string> = { apikey: SUPABASE_SERVICE_ROLE_KEY, ...extra };
@@ -46,14 +47,16 @@ function extractJsonObject(text: string) {
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false): Promise<Response> {
-  // Retry with backoff on 429 (Pollinations queue full), then fall back to Lovable AI
+  // Retry with backoff on 429 (Pollinations queue full), then try another free model before paid fallback.
   let lastFreeResponse: Response | null = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  const freeModels = [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL];
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const model = freeModels[Math.min(attempt, freeModels.length - 1)];
     const r = await fetch(FREE_AI_URL, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        model: FREE_TEXT_MODEL,
+        model,
         messages,
         stream,
         ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
