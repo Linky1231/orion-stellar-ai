@@ -55,13 +55,20 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms: number) {
 }
 
 function messagesToPrompt(messages: any[]) {
-  return (messages || []).map((m: any) => {
+  const normalized = (messages || []).map((m: any) => {
     const role = m.role === "assistant" ? "assistant" : m.role === "system" ? "system" : "user";
     const content = Array.isArray(m.content)
       ? m.content.map((p: any) => p?.text || p?.image_url?.url || "").filter(Boolean).join("\n")
       : String(m.content || "");
-    return `<|im_start|>${role}\n${content}\n<|im_end|>`;
-  }).join("\n") + "\n<|im_start|>assistant\n";
+    return { role, content: content.replace(/\s+/g, " ").trim() };
+  });
+  const system = normalized.find((m: any) => m.role === "system")?.content.slice(0, 500);
+  const recent = normalized.filter((m: any) => m.role !== "system").slice(-4);
+  const parts = [
+    ...(system ? [{ role: "system", content: system }] : []),
+    ...recent.map((m: any) => ({ ...m, content: m.content.slice(0, m.role === "user" ? 700 : 450) })),
+  ];
+  return parts.map((m: any) => `<|im_start|>${m.role}\n${m.content}\n<|im_end|>`).join("\n").slice(-1700) + "\n<|im_start|>assistant\n";
 }
 
 function textResponseAsAI(text: string, stream: boolean, _jsonMode = false) {
@@ -92,7 +99,7 @@ async function stableHordeText(messages: any[]) {
     headers: { "content-type": "application/json", "apikey": HORDE_API_KEY, "Client-Agent": HORDE_CLIENT_AGENT },
     body: JSON.stringify({
       prompt: messagesToPrompt(messages),
-      params: { max_length: 900, max_context_length: 4096, temperature: 0.7, top_p: 0.9, repetition_penalty: 1.08 },
+      params: { max_length: 220, max_context_length: 512, temperature: 0.7, top_p: 0.9, repetition_penalty: 1.08 },
       trusted_workers: false,
       models: ["aphrodite/TheDrummer/Anubis-70B-v1.2"],
     }),
