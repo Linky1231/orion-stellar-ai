@@ -137,14 +137,16 @@ export function ChatApp() {
     const tempId = "tmp-" + Date.now();
     setMessages((m) => [...m, { id: tempId, conversation_id: id, role: "assistant", content: "", attachments: [], created_at: new Date().toISOString() }]);
 
+    const MAX_LEN = 600;
+    let truncated = false;
     try {
-      const runner = searchMode ? streamSearch(text, history, (delta) => {
+      const onDelta = (delta: string) => {
+        if (truncated) return;
         acc += delta;
+        if (acc.length > MAX_LEN) { acc = acc.slice(0, MAX_LEN); truncated = true; }
         setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: acc } : x));
-      }) : streamChat(history, (delta) => {
-        acc += delta;
-        setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: acc } : x));
-      });
+      };
+      const runner = searchMode ? streamSearch(text, history, onDelta) : streamChat(history, onDelta);
       await runner;
       const { data: a } = await supabase.from("messages")
         .insert({ conversation_id: id, role: "assistant", content: acc })
