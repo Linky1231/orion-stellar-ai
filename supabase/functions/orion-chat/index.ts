@@ -371,21 +371,15 @@ Deno.serve(async (req) => {
         } catch (e) { lastErr += ` | ${att.model} error: ${String(e)}`; }
       }
 
-      // Fallback: Pollinations (free, no key).
+      // Fallback gratuito: devolver una URL directa evita timeouts del backend/iPhone.
       if (!imgBytes) {
         const polToken = Deno.env.get("POLLINATIONS_TOKEN") || "";
         const polRef = polToken ? `&token=${encodeURIComponent(polToken)}` : "&referrer=orion-estellar.lovable.app";
-        const polUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&seed=${Date.now()}${polRef}`;
-        try {
-          const r = await fetch(polUrl, { headers: { accept: "image/*", referer: "https://orion-estellar.lovable.app" } });
-          if (r.ok) {
-            const ct = r.headers.get("content-type") || "";
-            if (!ct.includes("text/html") && !ct.includes("application/json")) {
-              contentType = ct || "image/jpeg";
-              imgBytes = new Uint8Array(await r.arrayBuffer());
-            } else { lastErr += ` | pollinations tipo inválido (${ct})`; }
-          } else { lastErr += ` | pollinations HTTP ${r.status}`; }
-        } catch (e) { lastErr += ` | pollinations error: ${String(e)}`; }
+        const polUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&safe=false&seed=${Date.now()}${polRef}`;
+        console.warn("image generation using direct fallback", lastErr);
+        return new Response(JSON.stringify({ imageUrl: polUrl, fallback: true }), {
+          headers: { ...corsHeaders, "content-type": "application/json" },
+        });
       }
 
       if (!imgBytes) {
