@@ -9,7 +9,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const POLLINATIONS_API_KEY = Deno.env.get("POLLINATIONS_API_KEY");
 const FREE_AI_URL = "https://text.pollinations.ai/openai";
 const FREE_TEXT_MODEL = "openai-fast";
 const FREE_TEXT_FALLBACK_MODEL = "openai";
@@ -243,6 +242,36 @@ function findImageBase64(value: any): string | null {
   return null;
 }
 
+async function generatePublicImage(prompt: string) {
+  const start = await fetch("https://stablehorde.net/api/v2/generate/async", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "apikey": "0000000000",
+      "Client-Agent": "OrionEstellar:1.0:Linky",
+    },
+    body: JSON.stringify({
+      prompt,
+      params: { n: 1, width: 512, height: 512, steps: 12, cfg_scale: 7, sampler_name: "k_euler" },
+      nsfw: false,
+      censor_nsfw: true,
+      trusted_workers: false,
+    }),
+  });
+  const startJson = await safeJson(start);
+  if (!start.ok || !startJson?.id) throw new Error(startJson?.message || startJson?.error || "El proveedor público rechazó la petición.");
+  const id = String(startJson.id);
+  for (let i = 0; i < 24; i++) {
+    await new Promise((res) => setTimeout(res, i === 0 ? 2500 : 5000));
+    const status = await fetch(`https://stablehorde.net/api/v2/generate/status/${id}`);
+    const statusJson = await safeJson(status);
+    const generation = statusJson?.generations?.[0];
+    if (generation?.img) return String(generation.img);
+    if (statusJson?.faulted) throw new Error("El proveedor público falló generando la imagen.");
+  }
+  throw new Error("El proveedor público tardó demasiado. Intenta de nuevo.");
+}
+
 async function aiJSON(messages: any[], schema: any, name: string, _model = FREE_TEXT_MODEL) {
   const r = await freeAI([
     { role: "system", content: `Devuelve únicamente JSON válido para la función ${name}, sin markdown ni explicación. Esquema esperado: ${JSON.stringify(schema)}` },
@@ -268,9 +297,22 @@ Deno.serve(async (req) => {
         ? `${String(prompt || "imagen creativa")}. Contexto del proyecto indie del usuario: ${noteContext}. Mantén coherencia con esas notas.`
         : String(prompt || "imagen creativa");
       const finalPrompt = enrichedPrompt.slice(0, 1200);
-      const publicUrl = POLLINATIONS_API_KEY
-        ? `https://gen.pollinations.ai/image/${encodeURIComponent(finalPrompt)}?key=${encodeURIComponent(POLLINATIONS_API_KEY)}`
-        : `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}`;
+      const externalUrl = await generatePublicImage(finalPrompt);
+      const imgRes = await fetch(externalUrl);
+      if (!imgRes.ok) throw new Error("No se pudo descargar la imagen generada.");
+      const contentType = imgRes.headers.get("content-type") || "image/webp";
+      const ext = contentType.includes("png") ? "png" : contentType.includes("jpeg") || contentType.includes("jpg") ? "jpg" : "webp";
+      const path = `generated/${crypto.randomUUID()}.${ext}`;
+      const up = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-attachments/${path}`, {
+        method: "POST",
+        headers: supabaseAdminHeaders({ "content-type": contentType, "x-upsert": "false" }),
+        body: new Uint8Array(await imgRes.arrayBuffer()),
+      });
+      if (!up.ok) {
+        const t = await up.text();
+        throw new Error(`No se pudo guardar la imagen: ${t}`);
+      }
+      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/chat-attachments/${path}`;
       return new Response(JSON.stringify({ imageUrl: publicUrl }), {
         headers: { ...corsHeaders, "content-type": "application/json" },
       });
