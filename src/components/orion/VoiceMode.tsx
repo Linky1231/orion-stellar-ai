@@ -172,9 +172,11 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
 
   const stopRecognition = useCallback(() => {
     shouldListenRef.current = false;
-    try { recogRef.current?.abort?.(); } catch {}
-    try { recogRef.current?.stop?.(); } catch {}
+    const r = recogRef.current;
     recogRef.current = null;
+    micStartedRef.current = false;
+    try { r?.abort?.(); } catch {}
+    try { r?.stop?.(); } catch {}
     if (silenceTimerRef.current) { window.clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
     clearInactivity();
   }, []);
