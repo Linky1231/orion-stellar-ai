@@ -371,7 +371,7 @@ function GeneratedImage({ src }: { src: string }) {
       return;
     }
     if (src.includes("image.pollinations.ai")) {
-      window.setTimeout(() => setUrl(src), 7000);
+      window.setTimeout(() => setUrl(`${src}#retry-${Date.now()}`), 7000);
       setTries((n) => n + 1);
       return;
     }
