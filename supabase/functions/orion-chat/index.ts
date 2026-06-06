@@ -266,7 +266,7 @@ Deno.serve(async (req) => {
       const enrichedPrompt = noteContext
         ? `${String(prompt || "imagen creativa")}. Contexto del proyecto indie del usuario: ${noteContext}. Mantén coherencia con esas notas.`
         : String(prompt || "imagen creativa");
-      const finalPrompt = `${enrichedPrompt}. high quality digital art`.slice(0, 1200);
+      const finalPrompt = enrichedPrompt.slice(0, 1200);
       const publicUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}`;
       return new Response(JSON.stringify({ imageUrl: publicUrl }), {
         headers: { ...corsHeaders, "content-type": "application/json" },
