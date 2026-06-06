@@ -277,20 +277,27 @@ Deno.serve(async (req) => {
       const enrichedPrompt = noteContext
         ? `${String(prompt || "imagen creativa")}. Contexto del proyecto indie del usuario: ${noteContext}. Mantén coherencia con esas notas.`
         : String(prompt || "imagen creativa");
-      const cleanPrompt = encodeURIComponent(enrichedPrompt.slice(0, 1800));
-
       let imgBytes: Uint8Array | null = null;
       let contentType = "image/png";
       let lastErr = "";
       const lovableKey = Deno.env.get("LOVABLE_API_KEY");
       const finalPrompt = enrichedPrompt.slice(0, 1800);
 
-      // Primary: Lovable AI Gateway. Gemini image models return images through
-      // chat completions; image-only models use the images endpoint.
-      const attempts: Array<{ model: string; endpoint: "chat" | "images"; body: any }> = lovableKey ? [
+      // Lovable AI Gateway image endpoint. Body shape changes by model family.
+      const attempts: Array<{ model: string; body: any }> = lovableKey ? [
+        {
+          model: "openai/gpt-image-2",
+          body: {
+            model: "openai/gpt-image-2",
+            prompt: finalPrompt,
+            quality: "low",
+            size: "1024x1024",
+            n: 1,
+            response_format: "b64_json",
+          },
+        },
         {
           model: "google/gemini-3.1-flash-image-preview",
-          endpoint: "chat",
           body: {
             model: "google/gemini-3.1-flash-image-preview",
             messages: [{ role: "user", content: finalPrompt }],
@@ -298,17 +305,15 @@ Deno.serve(async (req) => {
           },
         },
         {
-          model: "google/gemini-3-pro-image",
-          endpoint: "chat",
+          model: "google/gemini-3-pro-image-preview",
           body: {
-            model: "google/gemini-3-pro-image",
+            model: "google/gemini-3-pro-image-preview",
             messages: [{ role: "user", content: finalPrompt }],
             modalities: ["image", "text"],
           },
         },
         {
           model: "google/gemini-2.5-flash-image",
-          endpoint: "chat",
           body: {
             model: "google/gemini-2.5-flash-image",
             messages: [{ role: "user", content: finalPrompt }],
@@ -316,34 +321,12 @@ Deno.serve(async (req) => {
           },
         },
         {
-          model: "google/gemini-2.5-flash-image",
-          endpoint: "images",
+          model: "openai/gpt-image-1-mini",
           body: {
-            model: "google/gemini-2.5-flash-image",
+            model: "openai/gpt-image-1-mini",
             prompt: finalPrompt,
-            n: 1,
-            response_format: "b64_json",
-          },
-        },
-        {
-          model: "openai/gpt-image-2",
-          endpoint: "images",
-          body: {
-            model: "openai/gpt-image-2",
-            prompt: finalPrompt,
-            quality: "medium",
+            quality: "low",
             size: "1024x1024",
-            n: 1,
-            response_format: "b64_json",
-          },
-        },
-        {
-          model: "google/imagen-4.0-generate-001",
-          endpoint: "images",
-          body: {
-            model: "google/imagen-4.0-generate-001",
-            prompt: finalPrompt,
-            aspect_ratio: "1:1",
             n: 1,
             response_format: "b64_json",
           },
@@ -352,9 +335,9 @@ Deno.serve(async (req) => {
 
       for (const att of attempts) {
         try {
-          const gw = await fetch(`https://ai.gateway.lovable.dev/v1/${att.endpoint === "chat" ? "chat/completions" : "images/generations"}`, {
+          const gw = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
             method: "POST",
-            headers: { "content-type": "application/json", "Lovable-API-Key": lovableKey! },
+            headers: { "content-type": "application/json", "Lovable-API-Key": lovableKey!, "X-Lovable-AIG-SDK": "orion-edge-function" },
             body: JSON.stringify(att.body),
           });
           if (gw.ok) {
@@ -365,31 +348,18 @@ Deno.serve(async (req) => {
           } else {
             const gwText = await gw.text().catch(() => "");
             lastErr += ` | ${att.model} HTTP ${gw.status}${gwText ? `: ${gwText.slice(0, 200)}` : ""}`;
-            // 402 (no credits) — no point trying more
-            if (gw.status === 402) break;
           }
         } catch (e) { lastErr += ` | ${att.model} error: ${String(e)}`; }
-      }
-
-      // Fallback gratuito: devolver una URL directa evita timeouts del backend/iPhone.
-      if (!imgBytes) {
-        const polToken = Deno.env.get("POLLINATIONS_TOKEN") || "";
-        const polRef = polToken ? `&token=${encodeURIComponent(polToken)}` : "&referrer=orion-estellar.lovable.app";
-        const polUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&safe=false&seed=${Date.now()}${polRef}`;
-        console.warn("image generation using direct fallback", lastErr);
-        return new Response(JSON.stringify({ imageUrl: polUrl, fallback: true }), {
-          headers: { ...corsHeaders, "content-type": "application/json" },
-        });
       }
 
       if (!imgBytes) {
         console.warn("image generation failed", lastErr);
         return new Response(JSON.stringify({
-          error: "IMAGE_GENERATION_UNAVAILABLE",
+          error: lastErr.includes("402") ? "PAYMENT_REQUIRED" : "IMAGE_GENERATION_UNAVAILABLE",
           message: lastErr.includes("402")
-            ? "El proveedor gratuito de imágenes rechazó la petición y el generador alternativo no devolvió una imagen. Intenta de nuevo con una descripción más concreta o espera unos minutos."
+            ? "El generador de imágenes potente necesita créditos de Lovable AI para funcionar. Añade saldo en Settings → Workspace → Cloud & AI balance."
             : `No se pudo generar la imagen: ${lastErr}`,
-          fallback: true,
+          fallback: false,
         }), { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } });
       }
       const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";

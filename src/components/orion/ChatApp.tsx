@@ -381,7 +381,7 @@ function GeneratedImage({ src }: { src: string }) {
   }
 
   if (failed) {
-    return <div className="liquid-glass rounded-2xl border border-border px-4 py-3 text-sm text-muted-foreground">El generador gratuito está saturado. Intenta de nuevo en unos segundos.</div>;
+    return <div className="liquid-glass rounded-2xl border border-border px-4 py-3 text-sm text-muted-foreground">No se pudo cargar la imagen generada. Intenta de nuevo.</div>;
   }
 
   return <img src={url} alt="Imagen generada" onError={retry} className="rounded-2xl max-h-80 border border-border shadow-soft" />;
