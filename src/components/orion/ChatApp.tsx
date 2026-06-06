@@ -275,6 +275,18 @@ export function ChatApp() {
               <button onClick={() => { sfx.tap(); setSearchMode((v) => !v); if (!searchMode) setImageMode(false); }} className={`tap p-2 rounded-lg ${searchMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Buscar info">
                 <Search className="w-4 h-4" />
               </button>
+              <button
+                onClick={() => {
+                  sfx.tap();
+                  if (isIOS()) { toast.error("El modo voz no está disponible en iOS."); return; }
+                  if (!isAndroid()) { toast.error("El modo voz solo está disponible en Android."); return; }
+                  setVoiceOpen(true);
+                }}
+                className="tap p-2 rounded-lg hover:bg-accent"
+                title="Modo voz"
+              >
+                <Mic className="w-4 h-4" />
+              </button>
               <button onClick={send} disabled={streaming} className="tap p-2 rounded-lg gradient-orion text-primary-foreground disabled:opacity-50 shadow-glow" title="Enviar">
                 <Send className="w-4 h-4" />
               </button>
