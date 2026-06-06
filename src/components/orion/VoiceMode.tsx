@@ -143,14 +143,22 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
       }
     };
     r.onerror = (e: any) => {
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        setError("Permiso de micrófono denegado.");
-        shouldListenRef.current = false;
-        if (recogRef.current === r) recogRef.current = null;
-        micStartedRef.current = false;
-        clearInactivity();
-        setState("idle");
+      const err = e?.error || "unknown";
+      if (err === "no-speech" || err === "aborted") return;
+      if (err === "not-allowed" || err === "service-not-allowed") {
+        setError("Permiso de micrófono denegado. Habilítalo en el navegador.");
+      } else if (err === "audio-capture") {
+        setError("No se detectó micrófono. Conecta uno y vuelve a intentar.");
+      } else if (err === "network") {
+        setError("Error de red en el reconocimiento de voz.");
+      } else {
+        setError(`Error de reconocimiento: ${err}`);
       }
+      shouldListenRef.current = false;
+      if (recogRef.current === r) recogRef.current = null;
+      micStartedRef.current = false;
+      clearInactivity();
+      setState("idle");
     };
     r.onend = () => {
       if (recogRef.current === r) {
