@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { X, Mic, Loader2 } from "lucide-react";
+import { X, Mic, Loader2, Square } from "lucide-react";
 import { OrionLogo } from "./OrionLogo";
 import { supabase } from "@/integrations/supabase/client";
-import { getDeviceId } from "@/lib/device";
 import { streamChat, type ChatMsg } from "@/lib/orion-api";
 
 type Props = {
@@ -15,7 +14,12 @@ type Props = {
 
 type State = "idle" | "listening" | "thinking" | "speaking";
 
-// Pick a Google Spanish voice if available
+const VOICE_SYSTEM: ChatMsg = {
+  role: "system",
+  content:
+    "Estás en MODO VOZ. Responde SIEMPRE en español, de forma muy breve y conversacional (1-2 frases, máximo 40 palabras). Sin listas, sin markdown, sin emojis, sin código. Habla como una persona en una conversación natural.",
+};
+
 function pickVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
@@ -37,11 +41,12 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
   const convRef = useRef<string | null>(convId);
   const finalBufRef = useRef("");
   const silenceTimerRef = useRef<number | null>(null);
+  const processingRef = useRef(false);
+  const shouldListenRef = useRef(false);
 
   useEffect(() => { convRef.current = convId; }, [convId]);
   useEffect(() => { stateRef.current = state; }, [state]);
 
-  // Load voices
   useEffect(() => {
     if (!open) return;
     const load = () => { voiceRef.current = pickVoice(); };
@@ -50,7 +55,6 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
     return () => { window.speechSynthesis.onvoiceschanged = null as any; };
   }, [open]);
 
-  // Load existing conversation history when opening
   useEffect(() => {
     if (!open || !convId) { historyRef.current = []; return; }
     (async () => {
@@ -60,63 +64,90 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
     })();
   }, [open, convId]);
 
-  const startListening = useCallback(() => {
+  // Dedup consecutive repeated words (e.g. "hola hola hola" → "hola")
+  const dedupWords = (s: string) => {
+    const parts = s.trim().split(/\s+/);
+    const out: string[] = [];
+    for (const w of parts) {
+      const norm = w.toLowerCase().replace(/[.,!?;:]/g, "");
+      const last = out[out.length - 1]?.toLowerCase().replace(/[.,!?;:]/g, "");
+      if (norm !== last) out.push(w);
+    }
+    return out.join(" ");
+  };
+
+  const startRecognition = useCallback(() => {
     const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) { setError("Reconocimiento de voz no soportado en este navegador."); return; }
-    try { recogRef.current?.stop(); } catch {}
+    try { recogRef.current?.abort?.(); } catch {}
     const r = new SR();
     r.lang = "es-ES";
     r.continuous = true;
     r.interimResults = true;
+    r.maxAlternatives = 1;
     finalBufRef.current = "";
     setTranscript("");
+
     r.onresult = (ev: any) => {
-      // If Orion is speaking and user talks → interrupt
+      // Interrupt Orion when user speaks
       if (stateRef.current === "speaking") {
         window.speechSynthesis.cancel();
         setReply("");
         setState("listening");
       }
+      if (processingRef.current || stateRef.current === "thinking") return;
+
       let interim = "";
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         const res = ev.results[i];
-        if (res.isFinal) finalBufRef.current += res[0].transcript + " ";
-        else interim += res[0].transcript;
+        const t = res[0].transcript;
+        if (res.isFinal) finalBufRef.current = dedupWords((finalBufRef.current + " " + t).trim());
+        else interim += t + " ";
       }
-      setTranscript((finalBufRef.current + interim).trim());
-      // Reset silence timer
+      const combined = dedupWords((finalBufRef.current + " " + interim).trim());
+      setTranscript(combined);
+
       if (silenceTimerRef.current) window.clearTimeout(silenceTimerRef.current);
-      const text = (finalBufRef.current + interim).trim();
-      if (text.length > 0) {
+      if (combined.length > 0) {
         silenceTimerRef.current = window.setTimeout(() => {
-          const final = finalBufRef.current.trim() || text;
-          if (final.length >= 2) handleUserUtterance(final);
-        }, 1400);
+          const final = dedupWords((finalBufRef.current || combined).trim());
+          if (final.length >= 2 && !processingRef.current) handleUserUtterance(final);
+        }, 1300);
       }
     };
     r.onerror = (e: any) => {
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         setError("Permiso de micrófono denegado.");
+        shouldListenRef.current = false;
         setState("idle");
-      } else if (e.error === "no-speech") {
-        // ignore
       }
     };
     r.onend = () => {
-      // Auto-restart while in voice mode and not thinking
-      if (open && (stateRef.current === "listening" || stateRef.current === "speaking")) {
+      if (shouldListenRef.current && !processingRef.current) {
         try { r.start(); } catch {}
       }
     };
     recogRef.current = r;
     try { r.start(); setState("listening"); } catch {}
-  }, [open]);
+  }, []);
 
-  const stopListening = useCallback(() => {
-    try { recogRef.current?.stop(); } catch {}
+  const stopRecognition = useCallback(() => {
+    shouldListenRef.current = false;
+    try { recogRef.current?.abort?.(); } catch {}
+    try { recogRef.current?.stop?.(); } catch {}
     recogRef.current = null;
     if (silenceTimerRef.current) { window.clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
   }, []);
+
+  const resumeListening = useCallback(() => {
+    finalBufRef.current = "";
+    setTranscript("");
+    shouldListenRef.current = true;
+    processingRef.current = false;
+    setState("listening");
+    // Recreate to fully reset state
+    startRecognition();
+  }, [startRecognition]);
 
   const speak = useCallback((text: string, onDone: () => void) => {
     window.speechSynthesis.cancel();
@@ -133,13 +164,17 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
   }, []);
 
   const handleUserUtterance = useCallback(async (text: string) => {
+    processingRef.current = true;
+    // Pause recognition while we process + speak
+    try { recogRef.current?.stop?.(); } catch {}
+    if (silenceTimerRef.current) { window.clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
+
     finalBufRef.current = "";
     setTranscript(text);
     setState("thinking");
     try {
       const id = await ensureConv(text);
       convRef.current = id;
-      // Save user message
       await supabase.from("messages").insert({
         conversation_id: id, role: "user", content: text, attachments: [],
       });
@@ -147,7 +182,7 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
       historyRef.current = [...historyRef.current, { role: "user", content: text }];
 
       let acc = "";
-      await streamChat(historyRef.current, (delta) => {
+      await streamChat([VOICE_SYSTEM, ...historyRef.current], (delta) => {
         acc += delta;
         setReply(acc);
       });
@@ -160,31 +195,40 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
 
       speak(acc, () => {
         setReply("");
-        setState("listening");
+        resumeListening();
       });
     } catch (e: any) {
       setError(e.message || "Error");
-      setState("listening");
+      resumeListening();
     }
-  }, [ensureConv, onMessagesChanged, speak]);
+  }, [ensureConv, onMessagesChanged, speak, resumeListening]);
 
-  // Start/stop on open
+  const handleStopSpeaking = useCallback(() => {
+    if (stateRef.current === "speaking") {
+      window.speechSynthesis.cancel();
+      setReply("");
+      resumeListening();
+    }
+  }, [resumeListening]);
+
   useEffect(() => {
     if (open) {
       setError(null);
       setReply("");
       setTranscript("");
-      startListening();
+      processingRef.current = false;
+      shouldListenRef.current = true;
+      startRecognition();
     } else {
-      stopListening();
+      stopRecognition();
       window.speechSynthesis.cancel();
       setState("idle");
     }
     return () => {
-      stopListening();
+      stopRecognition();
       window.speechSynthesis.cancel();
     };
-  }, [open, startListening, stopListening]);
+  }, [open, startRecognition, stopRecognition]);
 
   if (!open) return null;
 
@@ -231,12 +275,22 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
           )}
         </div>
 
+        {state === "speaking" && (
+          <button
+            onClick={handleStopSpeaking}
+            className="tap flex items-center gap-2 px-5 py-2.5 rounded-full bg-destructive text-destructive-foreground shadow-soft hover:opacity-90"
+          >
+            <Square className="w-4 h-4 fill-current" />
+            <span className="text-sm font-medium">Interrumpir</span>
+          </button>
+        )}
+
         {error && (
           <div className="text-sm text-destructive max-w-md">{error}</div>
         )}
 
         <div className="text-[11px] text-muted-foreground max-w-xs">
-          Habla con normalidad. Puedes interrumpir a Orión en cualquier momento.
+          Habla con normalidad. Puedes interrumpir a Orión hablando o con el botón.
         </div>
       </div>
     </div>
