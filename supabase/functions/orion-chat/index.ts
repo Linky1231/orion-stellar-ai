@@ -12,6 +12,8 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FREE_AI_URL = "https://text.pollinations.ai/openai";
 const FREE_TEXT_MODEL = "openai-fast";
 const FREE_TEXT_FALLBACK_MODEL = "openai";
+const HORDE_API_KEY = "0000000000";
+const HORDE_CLIENT_AGENT = "OrionEstellar:1.0:Linky";
 
 function supabaseAdminHeaders(extra: Record<string, string> = {}) {
   const headers: Record<string, string> = { apikey: SUPABASE_SERVICE_ROLE_KEY, ...extra };
@@ -51,28 +53,24 @@ async function freeAI(messages: any[], stream = false, jsonMode = false): Promis
   const freeModels = [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL];
   for (let attempt = 0; attempt < 4; attempt++) {
     const model = freeModels[Math.min(attempt, freeModels.length - 1)];
-    const r = await fetch(FREE_AI_URL, {
+    const r = await fetchWithTimeout(FREE_AI_URL, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages,
-        stream,
-        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-      }),
-    });
+      headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
+      body: JSON.stringify({ model, messages, stream, ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
+    }, 10000).catch(() => null);
+    if (!r) continue;
     if (r.status !== 429) return r;
     lastFreeResponse = r.clone();
     try { await r.body?.cancel(); } catch { /* ignore */ }
     await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
   }
-  if (lastFreeResponse) return lastFreeResponse;
-  // Last resort: return the 429 so caller surfaces a clean error
-  return fetch(FREE_AI_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ model: FREE_TEXT_MODEL, messages, stream }),
-  });
+  try {
+    const text = jsonMode ? JSON.stringify(await stableHordeJSON(messages)) : await stableHordeText(messages);
+    return textResponseAsAI(text, stream, jsonMode);
+  } catch (_e) {
+    if (lastFreeResponse) return lastFreeResponse;
+    return aiErrorResponse(429, "queue full", stream);
+  }
 }
 
 async function freeVisionAI(messages: any[], stream = false): Promise<Response> {
