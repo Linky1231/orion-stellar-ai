@@ -266,106 +266,17 @@ Deno.serve(async (req) => {
       const enrichedPrompt = noteContext
         ? `${String(prompt || "imagen creativa")}. Contexto del proyecto indie del usuario: ${noteContext}. Mantén coherencia con esas notas.`
         : String(prompt || "imagen creativa");
-      let imgBytes: Uint8Array | null = null;
-      let contentType = "image/png";
-      let lastErr = "";
-      const lovableKey = Deno.env.get("LOVABLE_API_KEY");
       const finalPrompt = enrichedPrompt.slice(0, 1800);
-
-      // Lovable AI Gateway image endpoint. Body shape changes by model family.
-      const attempts: Array<{ model: string; body: any }> = lovableKey ? [
-        {
-          model: "openai/gpt-image-2",
-          body: {
-            model: "openai/gpt-image-2",
-            prompt: finalPrompt,
-            quality: "low",
-            size: "1024x1024",
-            n: 1,
-            response_format: "b64_json",
-          },
-        },
-        {
-          model: "google/gemini-3.1-flash-image-preview",
-          body: {
-            model: "google/gemini-3.1-flash-image-preview",
-            messages: [{ role: "user", content: finalPrompt }],
-            modalities: ["image", "text"],
-          },
-        },
-        {
-          model: "google/gemini-3-pro-image-preview",
-          body: {
-            model: "google/gemini-3-pro-image-preview",
-            messages: [{ role: "user", content: finalPrompt }],
-            modalities: ["image", "text"],
-          },
-        },
-        {
-          model: "google/gemini-2.5-flash-image",
-          body: {
-            model: "google/gemini-2.5-flash-image",
-            messages: [{ role: "user", content: finalPrompt }],
-            modalities: ["image", "text"],
-          },
-        },
-        {
-          model: "openai/gpt-image-1-mini",
-          body: {
-            model: "openai/gpt-image-1-mini",
-            prompt: finalPrompt,
-            quality: "low",
-            size: "1024x1024",
-            n: 1,
-            response_format: "b64_json",
-          },
-        },
-      ] : [];
-
-      for (const att of attempts) {
-        try {
-          const gw = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
-            method: "POST",
-            headers: { "content-type": "application/json", "Lovable-API-Key": lovableKey!, "X-Lovable-AIG-SDK": "orion-edge-function" },
-            body: JSON.stringify(att.body),
-          });
-          if (gw.ok) {
-            const j = await gw.json();
-            const b64 = findImageBase64(j);
-            if (b64) { imgBytes = base64ToBytes(b64); contentType = "image/png"; break; }
-            lastErr += ` | ${att.model}: sin imagen`;
-          } else {
-            const gwText = await gw.text().catch(() => "");
-            lastErr += ` | ${att.model} HTTP ${gw.status}${gwText ? `: ${gwText.slice(0, 200)}` : ""}`;
-          }
-        } catch (e) { lastErr += ` | ${att.model} error: ${String(e)}`; }
-      }
-
-      if (!imgBytes) {
-        console.warn("image generation failed", lastErr);
-        return new Response(JSON.stringify({
-          error: lastErr.includes("402") ? "PAYMENT_REQUIRED" : "IMAGE_GENERATION_UNAVAILABLE",
-          message: lastErr.includes("402")
-            ? "El generador de imágenes potente necesita créditos de Lovable AI para funcionar. Añade saldo en Settings → Workspace → Cloud & AI balance."
-            : `No se pudo generar la imagen: ${lastErr}`,
-          fallback: false,
-        }), { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } });
-      }
-      const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
-      const path = `generated/${crypto.randomUUID()}.${ext}`;
-      const up = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-attachments/${path}`, {
-        method: "POST",
-        headers: supabaseAdminHeaders({
-          "content-type": contentType,
-          "x-upsert": "false",
-        }),
-        body: imgBytes,
+      const seed = Math.floor(Math.random() * 1_000_000_000);
+      const params = new URLSearchParams({
+        width: "1024",
+        height: "1024",
+        seed: String(seed),
+        model: "flux",
+        nologo: "true",
+        enhance: "true",
       });
-      if (!up.ok) {
-        const t = await up.text();
-        return new Response(JSON.stringify({ error: `No se pudo guardar la imagen: ${t}` }), { status: 500, headers: { ...corsHeaders, "content-type": "application/json" } });
-      }
-      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/chat-attachments/${path}`;
+      const publicUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?${params.toString()}`;
       return new Response(JSON.stringify({ imageUrl: publicUrl }), {
         headers: { ...corsHeaders, "content-type": "application/json" },
       });
