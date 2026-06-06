@@ -209,11 +209,11 @@ export function ChatApp() {
 
       <main className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="glass border-b border-border px-4 py-3 flex items-center gap-3">
-          <button className="tap p-2 rounded-lg hover:bg-accent md:hidden" onClick={() => { sfx.tap(); setSidebarOpen(true); }}>
+        <header className="liquid-glass border-b border-border px-4 py-3 flex items-center gap-3 rounded-none">
+          <button className="tap btn-glass p-2 rounded-xl md:hidden" onClick={() => { sfx.tap(); setSidebarOpen(true); }}>
             <Menu className="w-5 h-5" />
           </button>
-          <button className="tap hidden md:flex p-2 rounded-lg hover:bg-accent" onClick={() => { sfx.tap(); setSidebarOpen((v) => !v); }}>
+          <button className="tap btn-glass hidden md:flex p-2 rounded-xl" onClick={() => { sfx.tap(); setSidebarOpen((v) => !v); }}>
             <Menu className="w-5 h-5" />
           </button>
           <OrionLogo size={36} glow={streaming} />
@@ -260,19 +260,19 @@ export function ChatApp() {
                 {searchMode && <Tag onClose={() => setSearchMode(false)}><Search className="w-3 h-3" /> Buscar info</Tag>}
               </div>
             )}
-            <div className="glass-strong rounded-2xl border border-border shadow-soft p-2 flex items-end gap-1">
+            <div className="liquid-glass rounded-2xl p-2 flex items-end gap-1">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
                 placeholder={imageMode ? "Describe la imagen…" : "Escribe un mensaje…"}
                 rows={1}
-                className="flex-1 bg-transparent outline-none resize-none px-3 py-2 text-sm max-h-40"
+                className="flex-1 bg-transparent outline-none resize-none px-3 py-2 text-sm max-h-40 placeholder:text-muted-foreground"
               />
-              <button onClick={() => { sfx.tap(); setImageMode((v) => !v); if (!imageMode) setSearchMode(false); }} className={`tap p-2 rounded-lg ${imageMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Generar imagen">
+              <button onClick={() => { sfx.tap(); setImageMode((v) => !v); if (!imageMode) setSearchMode(false); }} className={`tap p-2 rounded-xl ${imageMode ? "btn-cosmic" : "btn-glass"}`} title="Generar imagen">
                 <ImagePlus className="w-4 h-4" />
               </button>
-              <button onClick={() => { sfx.tap(); setSearchMode((v) => !v); if (!searchMode) setImageMode(false); }} className={`tap p-2 rounded-lg ${searchMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Buscar info">
+              <button onClick={() => { sfx.tap(); setSearchMode((v) => !v); if (!searchMode) setImageMode(false); }} className={`tap p-2 rounded-xl ${searchMode ? "btn-cosmic" : "btn-glass"}`} title="Buscar info">
                 <Search className="w-4 h-4" />
               </button>
               <button
@@ -282,12 +282,12 @@ export function ChatApp() {
                   if (!isAndroid()) { toast.error("El modo voz solo está disponible en Android."); return; }
                   setVoiceOpen(true);
                 }}
-                className="tap p-2 rounded-lg hover:bg-accent"
+                className="tap btn-glass p-2 rounded-xl"
                 title="Modo voz"
               >
                 <Mic className="w-4 h-4" />
               </button>
-              <button onClick={send} disabled={streaming} className="tap p-2 rounded-lg gradient-orion text-primary-foreground disabled:opacity-50 shadow-glow" title="Enviar">
+              <button onClick={send} disabled={streaming} className="tap btn-cosmic p-2 rounded-xl disabled:opacity-50" title="Enviar">
                 <Send className="w-4 h-4" />
               </button>
             </div>
@@ -357,12 +357,12 @@ function Bubble({ m }: { m: DBMsg }) {
           )
         ))}
         {m.content && (
-          <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-soft
-            ${isUser ? "gradient-orion text-primary-foreground rounded-br-sm" : "bg-card border border-border rounded-bl-sm"}`}>
+          <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed
+            ${isUser ? "btn-cosmic !rounded-2xl rounded-br-sm" : "liquid-glass rounded-bl-sm"}`}>
             {isUser ? (
-              <div className="whitespace-pre-wrap">{m.content}</div>
+              <div className="whitespace-pre-wrap relative z-10">{m.content}</div>
             ) : (
-              <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1.5 prose-pre:bg-muted prose-pre:text-foreground">
+              <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-1.5 prose-pre:bg-muted prose-pre:text-foreground relative z-10">
                 <ReactMarkdown>{m.content}</ReactMarkdown>
               </div>
             )}

@@ -77,7 +77,7 @@ export function Sidebar({
         />
       )}
       <aside
-        className={`fixed md:sticky top-0 left-0 h-screen w-[300px] z-50 glass-strong border-r border-border flex flex-col
+        className={`fixed md:sticky top-0 left-0 h-screen w-[300px] z-50 liquid-glass rounded-none border-r border-border flex flex-col
           transition-transform duration-300 ease-out
           ${open ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >
@@ -97,31 +97,31 @@ export function Sidebar({
         <div className="p-3 space-y-2">
           <button
             onClick={() => { sfx.tap(); onNew(); }}
-            className="w-full tap flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card hover:bg-accent border border-border text-sm font-medium shadow-soft"
+            className="w-full tap btn-cosmic flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium"
           >
             <Plus className="w-4 h-4" /> Nueva conversación
           </button>
           <button
             onClick={() => { sfx.tap(); onCreateImage(); }}
-            className="w-full tap flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card hover:bg-accent border border-border text-sm"
+            className="w-full tap btn-glass flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm"
           >
             <ImagePlus className="w-4 h-4 text-primary" /> Crear imagen con IA
           </button>
           <button
             onClick={() => { sfx.open(); onOpenNotes(); }}
-            className="w-full tap flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card hover:bg-accent border border-border text-sm"
+            className="w-full tap btn-glass flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm"
           >
             <StickyNote className="w-4 h-4 text-primary" /> Modo Notas
           </button>
           <button
             onClick={() => { sfx.open(); onOpenDebug(); }}
-            className="w-full tap flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card hover:bg-accent border border-border text-sm"
+            className="w-full tap btn-glass flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm"
           >
             <Bug className="w-4 h-4 text-primary" /> Modo Debug
           </button>
           <button
             onClick={() => { sfx.open(); onOpenCode(); }}
-            className="w-full tap flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card hover:bg-accent border border-border text-sm"
+            className="w-full tap btn-glass flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm"
           >
             <Code2 className="w-4 h-4 text-primary" /> Modo Code
           </button>
