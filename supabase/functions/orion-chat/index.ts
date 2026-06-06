@@ -1,5 +1,7 @@
 // Edge function: Orión Estellar - chat + image + memory + notes intelligence
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { generateText } from "npm:ai";
+import { createOpenAICompatible } from "npm:@ai-sdk/openai-compatible";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,7 +14,6 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FREE_AI_URL = "https://text.pollinations.ai/openai";
 const FREE_TEXT_MODEL = "openai-fast";
 const FREE_TEXT_FALLBACK_MODEL = "openai";
-const LOVABLE_AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const LOVABLE_TEXT_MODEL = "google/gemini-3-flash-preview";
 const HORDE_API_KEY = "0000000000";
 const HORDE_CLIENT_AGENT = "OrionEstellar:1.0:Linky";
