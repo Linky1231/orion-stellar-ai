@@ -9,7 +9,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 const FREE_AI_URL = "https://text.pollinations.ai/openai";
 const FREE_TEXT_MODEL = "openai-fast";
 const FREE_TEXT_FALLBACK_MODEL = "openai";
@@ -47,7 +46,7 @@ function extractJsonObject(text: string) {
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false): Promise<Response> {
-  // Retry with backoff on 429 (Pollinations queue full), then try another free model before paid fallback.
+  // Retry with backoff on 429 (Pollinations queue full), then try another free model.
   let lastFreeResponse: Response | null = null;
   const freeModels = [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL];
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -67,22 +66,7 @@ async function freeAI(messages: any[], stream = false, jsonMode = false): Promis
     try { await r.body?.cancel(); } catch { /* ignore */ }
     await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
   }
-  // Fallback: Lovable AI Gateway
-  if (LOVABLE_API_KEY) {
-    const paidFallback = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "content-type": "application/json", "Lovable-API-Key": LOVABLE_API_KEY },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages,
-        stream,
-        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-      }),
-    });
-    if (paidFallback.status !== 402) return paidFallback;
-    try { await paidFallback.body?.cancel(); } catch { /* ignore */ }
-    if (lastFreeResponse) return lastFreeResponse;
-  }
+  if (lastFreeResponse) return lastFreeResponse;
   // Last resort: return the 429 so caller surfaces a clean error
   return fetch(FREE_AI_URL, {
     method: "POST",
@@ -92,6 +76,7 @@ async function freeAI(messages: any[], stream = false, jsonMode = false): Promis
 }
 
 async function freeVisionAI(messages: any[], stream = false): Promise<Response> {
+  let lastFreeResponse: Response | null = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     const r = await fetch(FREE_AI_URL, {
       method: "POST",
@@ -99,19 +84,15 @@ async function freeVisionAI(messages: any[], stream = false): Promise<Response> 
       body: JSON.stringify({ model: "openai", messages, stream }),
     });
     if (r.status !== 429) return r;
+    lastFreeResponse = r.clone();
     try { await r.body?.cancel(); } catch { /* ignore */ }
     await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
   }
-  return lovableAI(messages, stream, "google/gemini-2.5-flash");
+  return lastFreeResponse || freeAI(messages, stream);
 }
 
 async function lovableAI(messages: any[], stream = false, model = "google/gemini-2.5-flash") {
-  if (!LOVABLE_API_KEY) return freeAI(messages, stream);
-  return fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", "Lovable-API-Key": LOVABLE_API_KEY },
-    body: JSON.stringify({ model, messages, stream }),
-  });
+  return freeAI(messages, stream);
 }
 
 function normalizeAiErrorText(text: string) {
