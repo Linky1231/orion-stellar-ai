@@ -89,8 +89,6 @@ export function ChatApp() {
     const userMsg = { conversation_id: id, role: "user" as const, content: text, attachments: atts };
     const { data: saved } = await supabase.from("messages").insert(userMsg).select().single();
     if (saved) setMessages((m) => (m.some(x => x.id === (saved as any).id) ? m : [...m, saved as DBMsg]));
-    // Fire-and-forget memory extraction
-    extractAndStoreMemory(text);
 
     // Image generation mode
     if (imageMode) {
@@ -154,6 +152,7 @@ export function ChatApp() {
       setMessages((m) => m.map(x => x.id === tempId ? (a as DBMsg) : x));
       sfx.receive();
       await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", id);
+      window.setTimeout(() => extractAndStoreMemory(text), 2500);
     } catch (e: any) {
       sfx.error();
       setMessages((m) => m.map(x => x.id === tempId ? { ...x, content: "Error: " + e.message } : x));
