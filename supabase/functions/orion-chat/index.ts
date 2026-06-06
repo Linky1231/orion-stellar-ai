@@ -277,63 +277,79 @@ Deno.serve(async (req) => {
         : String(prompt || "imagen creativa");
       const cleanPrompt = encodeURIComponent(enrichedPrompt.slice(0, 1800));
 
-      // Fetch image from Pollinations (with retries) and persist to Supabase storage.
-      const polToken = Deno.env.get("POLLINATIONS_TOKEN") || "";
-      const polRef = polToken ? `&token=${encodeURIComponent(polToken)}` : "&referrer=orion-estellar.lovable.app";
-      const polUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&seed=${Date.now()}${polRef}`;
       let imgBytes: Uint8Array | null = null;
-      let contentType = "image/jpeg";
+      let contentType = "image/png";
       let lastErr = "";
-      for (let attempt = 0; attempt < 2; attempt++) {
+      const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+      const finalPrompt = enrichedPrompt.slice(0, 1800);
+
+      // Primary: Lovable AI Gateway with high-quality models.
+      // Try in order: Gemini 3 Pro Image, GPT-Image-2 (high), Gemini 2.5 Flash Image.
+      const attempts: Array<{ model: string; body: any }> = lovableKey ? [
+        {
+          model: "google/gemini-3-pro-image-preview",
+          body: {
+            model: "google/gemini-3-pro-image-preview",
+            messages: [{ role: "user", content: finalPrompt }],
+            modalities: ["image", "text"],
+          },
+        },
+        {
+          model: "openai/gpt-image-2",
+          body: {
+            model: "openai/gpt-image-2",
+            prompt: finalPrompt,
+            quality: "high",
+            size: "1024x1024",
+            n: 1,
+          },
+        },
+        {
+          model: "google/gemini-2.5-flash-image",
+          body: {
+            model: "google/gemini-2.5-flash-image",
+            messages: [{ role: "user", content: finalPrompt }],
+            modalities: ["image", "text"],
+          },
+        },
+      ] : [];
+
+      for (const att of attempts) {
         try {
-          const r = await fetch(polUrl, { headers: { accept: "image/*", referer: "https://orion-estellar.lovable.app" } });
-          if (!r.ok) {
-            const errorText = await r.text().catch(() => "");
-            lastErr = `Pollinations HTTP ${r.status}${errorText ? `: ${errorText.slice(0, 180)}` : ""}`;
-            if (r.status >= 500 || r.status === 429) await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
-            break;
+          const gw = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+            method: "POST",
+            headers: { "content-type": "application/json", "Lovable-API-Key": lovableKey! },
+            body: JSON.stringify(att.body),
+          });
+          if (gw.ok) {
+            const j = await gw.json();
+            const b64 = findImageBase64(j);
+            if (b64) { imgBytes = base64ToBytes(b64); contentType = "image/png"; break; }
+            lastErr += ` | ${att.model}: sin imagen`;
+          } else {
+            const gwText = await gw.text().catch(() => "");
+            lastErr += ` | ${att.model} HTTP ${gw.status}${gwText ? `: ${gwText.slice(0, 200)}` : ""}`;
+            // 402 (no credits) — no point trying more
+            if (gw.status === 402) break;
           }
-          const ct = r.headers.get("content-type") || "";
-          if (ct.includes("text/html") || ct.includes("application/json")) {
-            lastErr = `tipo inválido (${ct})`;
-            try { await r.body?.cancel(); } catch {}
-            continue;
-          }
-          contentType = ct || "image/jpeg";
-          imgBytes = new Uint8Array(await r.arrayBuffer());
-          break;
-        } catch (e) { lastErr = String(e); }
+        } catch (e) { lastErr += ` | ${att.model} error: ${String(e)}`; }
       }
 
-      // Fallback: Lovable AI Gateway image generation (uses LOVABLE_API_KEY).
+      // Fallback: Pollinations (free, no key).
       if (!imgBytes) {
-        const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-        if (lovableKey) {
-          try {
-            const gw = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
-              method: "POST",
-              headers: { "content-type": "application/json", "Lovable-API-Key": lovableKey },
-              body: JSON.stringify({
-                model: "openai/gpt-image-2",
-                prompt: enrichedPrompt.slice(0, 1800),
-                quality: "low",
-                size: "1024x1024",
-                n: 1,
-              }),
-            });
-            if (gw.ok) {
-              const j = await gw.json();
-              const b64 = findImageBase64(j);
-              if (b64) {
-                imgBytes = base64ToBytes(b64);
-                contentType = "image/png";
-              } else { lastErr += " | gateway: sin imagen"; }
-            } else {
-              const gwText = await gw.text().catch(() => "");
-              lastErr += ` | gateway HTTP ${gw.status}${gwText ? `: ${gwText.slice(0, 180)}` : ""}`;
-            }
-          } catch (e) { lastErr += ` | gateway error: ${String(e)}`; }
-        }
+        const polToken = Deno.env.get("POLLINATIONS_TOKEN") || "";
+        const polRef = polToken ? `&token=${encodeURIComponent(polToken)}` : "&referrer=orion-estellar.lovable.app";
+        const polUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&seed=${Date.now()}${polRef}`;
+        try {
+          const r = await fetch(polUrl, { headers: { accept: "image/*", referer: "https://orion-estellar.lovable.app" } });
+          if (r.ok) {
+            const ct = r.headers.get("content-type") || "";
+            if (!ct.includes("text/html") && !ct.includes("application/json")) {
+              contentType = ct || "image/jpeg";
+              imgBytes = new Uint8Array(await r.arrayBuffer());
+            } else { lastErr += ` | pollinations tipo inválido (${ct})`; }
+          } else { lastErr += ` | pollinations HTTP ${r.status}`; }
+        } catch (e) { lastErr += ` | pollinations error: ${String(e)}`; }
       }
 
       if (!imgBytes) {
