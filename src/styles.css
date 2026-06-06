@@ -159,7 +159,6 @@
     box-shadow: var(--shadow-glass);
   }
   .liquid-glass {
-    position: relative;
     background: color-mix(in oklab, var(--card) 50%, transparent);
     backdrop-filter: saturate(190%) blur(26px);
     border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
@@ -167,6 +166,8 @@
     overflow: hidden;
     isolation: isolate;
   }
+  /* Lower-specificity position so Tailwind .fixed/.absolute/.sticky still win */
+  :where(.liquid-glass) { position: relative; }
   .liquid-glass::before {
     content: "";
     position: absolute;
