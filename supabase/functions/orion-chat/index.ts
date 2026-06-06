@@ -235,6 +235,8 @@ function base64ToBytes(b64: string) {
 function findImageBase64(value: any): string | null {
   if (!value || typeof value !== "object") return null;
   if (typeof value.b64_json === "string" && value.b64_json.length > 100) return value.b64_json;
+  if (typeof value.image?.data === "string" && value.image.data.length > 100) return value.image.data;
+  if (typeof value.data === "string" && value.data.length > 100 && value.extra_content?.google?.mime_type?.startsWith("image/")) return value.data;
   if (typeof value.image_url?.url === "string" && value.image_url.url.startsWith("data:image/")) return value.image_url.url;
   if (typeof value.url === "string" && value.url.startsWith("data:image/")) return value.url;
   for (const child of Object.values(value)) {
@@ -283,11 +285,12 @@ Deno.serve(async (req) => {
       const lovableKey = Deno.env.get("LOVABLE_API_KEY");
       const finalPrompt = enrichedPrompt.slice(0, 1800);
 
-      // Primary: Lovable AI Gateway. Fast model first (evita timeouts en Safari/iOS),
-      // luego modelos de mayor calidad como fallback.
-      const attempts: Array<{ model: string; body: any }> = lovableKey ? [
+      // Primary: Lovable AI Gateway. Gemini image models return images through
+      // chat completions; image-only models use the images endpoint.
+      const attempts: Array<{ model: string; endpoint: "chat" | "images"; body: any }> = lovableKey ? [
         {
           model: "google/gemini-3.1-flash-image-preview",
+          endpoint: "chat",
           body: {
             model: "google/gemini-3.1-flash-image-preview",
             messages: [{ role: "user", content: finalPrompt }],
@@ -295,7 +298,17 @@ Deno.serve(async (req) => {
           },
         },
         {
+          model: "google/gemini-3-pro-image",
+          endpoint: "chat",
+          body: {
+            model: "google/gemini-3-pro-image",
+            messages: [{ role: "user", content: finalPrompt }],
+            modalities: ["image", "text"],
+          },
+        },
+        {
           model: "google/gemini-2.5-flash-image",
+          endpoint: "chat",
           body: {
             model: "google/gemini-2.5-flash-image",
             messages: [{ role: "user", content: finalPrompt }],
@@ -303,20 +316,43 @@ Deno.serve(async (req) => {
           },
         },
         {
+          model: "google/gemini-2.5-flash-image",
+          endpoint: "images",
+          body: {
+            model: "google/gemini-2.5-flash-image",
+            prompt: finalPrompt,
+            n: 1,
+            response_format: "b64_json",
+          },
+        },
+        {
           model: "openai/gpt-image-2",
+          endpoint: "images",
           body: {
             model: "openai/gpt-image-2",
             prompt: finalPrompt,
             quality: "medium",
             size: "1024x1024",
             n: 1,
+            response_format: "b64_json",
+          },
+        },
+        {
+          model: "google/imagen-4.0-generate-001",
+          endpoint: "images",
+          body: {
+            model: "google/imagen-4.0-generate-001",
+            prompt: finalPrompt,
+            aspect_ratio: "1:1",
+            n: 1,
+            response_format: "b64_json",
           },
         },
       ] : [];
 
       for (const att of attempts) {
         try {
-          const gw = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+          const gw = await fetch(`https://ai.gateway.lovable.dev/v1/${att.endpoint === "chat" ? "chat/completions" : "images/generations"}`, {
             method: "POST",
             headers: { "content-type": "application/json", "Lovable-API-Key": lovableKey! },
             body: JSON.stringify(att.body),
@@ -335,24 +371,19 @@ Deno.serve(async (req) => {
         } catch (e) { lastErr += ` | ${att.model} error: ${String(e)}`; }
       }
 
-      // Fallback: Pollinations (free, no key).
+      // Fallback gratuito: devolver una URL directa evita timeouts del backend/iPhone.
       if (!imgBytes) {
         const polToken = Deno.env.get("POLLINATIONS_TOKEN") || "";
         const polRef = polToken ? `&token=${encodeURIComponent(polToken)}` : "&referrer=orion-estellar.lovable.app";
-        const polUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&seed=${Date.now()}${polRef}`;
-        try {
-          const r = await fetch(polUrl, { headers: { accept: "image/*", referer: "https://orion-estellar.lovable.app" } });
-          if (r.ok) {
-            const ct = r.headers.get("content-type") || "";
-            if (!ct.includes("text/html") && !ct.includes("application/json")) {
-              contentType = ct || "image/jpeg";
-              imgBytes = new Uint8Array(await r.arrayBuffer());
-            } else { lastErr += ` | pollinations tipo inválido (${ct})`; }
-          } else { lastErr += ` | pollinations HTTP ${r.status}`; }
-        } catch (e) { lastErr += ` | pollinations error: ${String(e)}`; }
+        const polUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true&enhance=true&safe=false&seed=${Date.now()}${polRef}`;
+        console.warn("image generation using direct fallback", lastErr);
+        return new Response(JSON.stringify({ imageUrl: polUrl, fallback: true }), {
+          headers: { ...corsHeaders, "content-type": "application/json" },
+        });
       }
 
       if (!imgBytes) {
+        console.warn("image generation failed", lastErr);
         return new Response(JSON.stringify({
           error: "IMAGE_GENERATION_UNAVAILABLE",
           message: lastErr.includes("402")
