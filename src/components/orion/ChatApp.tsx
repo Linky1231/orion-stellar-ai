@@ -278,9 +278,9 @@ export function ChatApp() {
               <button
                 onClick={() => {
                   sfx.tap();
-                  if (isIOS()) { toast.error("El modo voz no está disponible en iOS."); return; }
+                  if (!isAndroid() && !isIOS()) { toast.error("El modo voz solo está disponible en móvil (Android/iPhone)."); return; }
                   const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-                  if (!SR) { toast.error("Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge."); return; }
+                  if (!SR) { toast.error("Tu navegador no soporta reconocimiento de voz."); return; }
                   setVoiceOpen(true);
                 }}
                 className="tap btn-glass p-2 rounded-xl"
