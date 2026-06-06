@@ -25,7 +25,7 @@ async function streamFromBody(body: Record<string, unknown>, onDelta: (s: string
   }
   if (!r.ok || !r.body) {
     const t = await r.text().catch(() => "");
-    if (r.status === 402) throw new Error("Sin créditos en Lovable AI. Añade saldo en Settings → Workspace → Cloud & AI balance.");
+    if (r.status === 402) throw new Error("El proveedor público no aceptó la petición ahora mismo. Intenta de nuevo en unos segundos.");
     if (r.status === 429) throw new Error("Demasiadas peticiones. Espera unos segundos e intenta de nuevo.");
     throw new Error(t || `HTTP ${r.status}`);
   }
@@ -80,7 +80,7 @@ export async function generateImage(prompt: string): Promise<string> {
   let d: any = {};
   try { d = JSON.parse(text); } catch { throw new Error("El generador devolvió una respuesta inválida. Intenta de nuevo."); }
   if (!r.ok) throw new Error(d.message || d.error || `HTTP ${r.status}`);
-  if (!d.imageUrl) throw new Error(d.message || d.error || "Pollinations no pudo generar la imagen ahora mismo.");
+  if (!d.imageUrl) throw new Error(d.message || d.error || "El proveedor público no pudo generar la imagen ahora mismo.");
   return d.imageUrl;
 }
 

@@ -114,7 +114,7 @@ async function stableHordeJSON(messages: any[]) {
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false): Promise<Response> {
-  // Retry with backoff on 429 (Pollinations queue full), then try another free model.
+  // Retry the public text endpoint, then fall back to a different public provider.
   let lastFreeResponse: Response | null = null;
   const freeModels = [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL];
   for (let attempt = 0; attempt < 4; attempt++) {
