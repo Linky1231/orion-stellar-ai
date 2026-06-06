@@ -207,7 +207,10 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
   const handleUserUtterance = useCallback(async (text: string) => {
     processingRef.current = true;
     // Pause recognition while we process + speak
-    try { recogRef.current?.stop?.(); } catch {}
+    const r = recogRef.current;
+    recogRef.current = null;
+    micStartedRef.current = false;
+    try { r?.stop?.(); } catch {}
     if (silenceTimerRef.current) { window.clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
 
     finalBufRef.current = "";
