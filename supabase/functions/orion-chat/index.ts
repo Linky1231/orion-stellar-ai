@@ -1,5 +1,7 @@
 // Edge function: Orión Estellar - chat + image + memory + notes intelligence
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { generateText } from "npm:ai";
+import { createOpenAICompatible } from "npm:@ai-sdk/openai-compatible";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +14,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FREE_AI_URL = "https://text.pollinations.ai/openai";
 const FREE_TEXT_MODEL = "openai-fast";
 const FREE_TEXT_FALLBACK_MODEL = "openai";
+const LOVABLE_TEXT_MODEL = "google/gemini-3-flash-preview";
 const HORDE_API_KEY = "0000000000";
 const HORDE_CLIENT_AGENT = "OrionEstellar:1.0:Linky";
 
@@ -52,6 +55,38 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms: number) {
   const timer = setTimeout(() => controller.abort(), ms);
   try { return await fetch(url, { ...init, signal: controller.signal }); }
   finally { clearTimeout(timer); }
+}
+
+function quickFallback(stream: boolean) {
+  return textResponseAsAI("Ahora mismo el servicio está lento. Intenta otra vez en unos segundos.", stream);
+}
+
+async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, maxTokens: number) {
+  const key = Deno.env.get("LOVABLE_API_KEY");
+  if (!key) return null;
+  try {
+    const gateway = createOpenAICompatible({
+      name: "lovable",
+      baseURL: "https://ai.gateway.lovable.dev/v1",
+      headers: { "Lovable-API-Key": key },
+    });
+    const result = await generateText({
+      model: gateway(LOVABLE_TEXT_MODEL),
+      messages,
+      maxOutputTokens: Math.min(maxTokens, 250),
+      temperature: 0.6,
+    });
+    const text = jsonMode ? result.text : result.text.slice(0, 600);
+    return textResponseAsAI(text, stream, jsonMode);
+  } catch (e) {
+    const message = String(e);
+    if (message.includes("Payment Required")) {
+      console.error("lovable ai credits exhausted");
+      return textResponseAsAI("La IA estable no tiene créditos disponibles ahora. Recarga créditos o inténtalo más tarde.", stream, jsonMode);
+    }
+    console.error("lovable ai failed", message);
+    return null;
+  }
 }
 
 function messagesToPrompt(messages: any[]) {
@@ -129,24 +164,20 @@ async function stableHordeJSON(messages: any[]) {
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
-  // Try Pollinations first (fast, streams). Fallback to Stable Horde only if it fails.
+  const lovable = await lovableAI(messages, stream, jsonMode, maxTokens);
+  if (lovable) return lovable;
+
+  // Public fallback: keep timeouts short so the UI never waits forever.
   for (const model of [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL]) {
     const r = await fetchWithTimeout(FREE_AI_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
-      body: JSON.stringify({ model, messages, stream, max_tokens: maxTokens, ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
-    }, stream ? 90000 : 90000).catch(() => null);
+      body: JSON.stringify({ model, messages, stream, max_tokens: Math.min(maxTokens, 250), ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
+    }, stream ? 12000 : 10000).catch(() => null);
     if (r?.ok) return r;
     if (r) { try { await r.body?.cancel(); } catch { /* ignore */ } }
   }
-  // Last resort: Stable Horde (slow but resilient)
-  try {
-    const text = jsonMode ? JSON.stringify(await stableHordeJSON(messages)) : await stableHordeText(messages);
-    return textResponseAsAI(text, stream, jsonMode);
-  } catch (e) {
-    console.error("all text providers failed", String(e));
-    return aiErrorResponse(429, "queue full", stream);
-  }
+  return quickFallback(stream);
 }
 
 async function freeVisionAI(messages: any[], stream = false): Promise<Response> {
