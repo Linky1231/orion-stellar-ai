@@ -218,29 +218,8 @@ export function ChatApp() {
             <div className="font-semibold tracking-tight leading-tight">Orión Estellar</div>
             <div className="text-[11px] text-muted-foreground">v5.0 · por Linky</div>
           </div>
-          <button
-            onClick={async () => {
-              sfx.tap();
-              if (isIOS()) { toast.error("El modo voz no está disponible en iPhone."); return; }
-              if (!isAndroid()) { toast.error("El modo voz solo está disponible en Android."); return; }
-              const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-              if (!SR) { toast.error("Tu navegador no soporta reconocimiento de voz."); return; }
-              try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                stream.getTracks().forEach((t) => t.stop());
-              } catch {
-                toast.error("Permiso de micrófono denegado. Habilítalo en los ajustes del navegador.");
-                return;
-              }
-              setVoiceOpen(true);
-            }}
-            className="tap btn-glass p-2 rounded-xl"
-            title="Modo voz"
-            aria-label="Modo voz"
-          >
-            <Mic className="w-5 h-5" />
-          </button>
         </header>
+
 
         {/* Messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6">
