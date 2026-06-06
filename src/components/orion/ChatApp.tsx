@@ -386,7 +386,7 @@ function GeneratedImage({ src }: { src: string }) {
   }
 
   if (failed) {
-    return <div className="liquid-glass rounded-2xl border border-border px-4 py-3 text-sm text-muted-foreground">Pollinations está saturado ahora mismo. Espera unos segundos y vuelve a generar la imagen.</div>;
+    return <div className="liquid-glass rounded-2xl border border-border px-4 py-3 text-sm text-muted-foreground">El proveedor público está saturado ahora mismo. Espera unos segundos y vuelve a generar la imagen.</div>;
   }
 
   return <img src={url} alt="Imagen generada" onError={retry} className="rounded-2xl max-h-80 border border-border shadow-soft" />;

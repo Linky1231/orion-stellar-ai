@@ -12,6 +12,8 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FREE_AI_URL = "https://text.pollinations.ai/openai";
 const FREE_TEXT_MODEL = "openai-fast";
 const FREE_TEXT_FALLBACK_MODEL = "openai";
+const HORDE_API_KEY = "0000000000";
+const HORDE_CLIENT_AGENT = "OrionEstellar:1.0:Linky";
 
 function supabaseAdminHeaders(extra: Record<string, string> = {}) {
   const headers: Record<string, string> = { apikey: SUPABASE_SERVICE_ROLE_KEY, ...extra };
@@ -45,34 +47,102 @@ function extractJsonObject(text: string) {
   try { return JSON.parse(text.slice(start, end + 1)); } catch { return {}; }
 }
 
-async function freeAI(messages: any[], stream = false, jsonMode = false): Promise<Response> {
-  // Retry with backoff on 429 (Pollinations queue full), then try another free model.
-  let lastFreeResponse: Response | null = null;
-  const freeModels = [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL];
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const model = freeModels[Math.min(attempt, freeModels.length - 1)];
-    const r = await fetch(FREE_AI_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages,
-        stream,
-        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-      }),
-    });
-    if (r.status !== 429) return r;
-    lastFreeResponse = r.clone();
-    try { await r.body?.cancel(); } catch { /* ignore */ }
-    await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
-  }
-  if (lastFreeResponse) return lastFreeResponse;
-  // Last resort: return the 429 so caller surfaces a clean error
-  return fetch(FREE_AI_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ model: FREE_TEXT_MODEL, messages, stream }),
+async function fetchWithTimeout(url: string, init: RequestInit, ms: number) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try { return await fetch(url, { ...init, signal: controller.signal }); }
+  finally { clearTimeout(timer); }
+}
+
+function messagesToPrompt(messages: any[]) {
+  const normalized = (messages || []).map((m: any) => {
+    const role = m.role === "assistant" ? "assistant" : m.role === "system" ? "system" : "user";
+    const content = Array.isArray(m.content)
+      ? m.content.map((p: any) => p?.text || p?.image_url?.url || "").filter(Boolean).join("\n")
+      : String(m.content || "");
+    return { role, content: content.replace(/\s+/g, " ").trim() };
   });
+  const system = normalized.find((m: any) => m.role === "system")?.content.slice(0, 500);
+  const recent = normalized.filter((m: any) => m.role !== "system").slice(-4);
+  const parts = [
+    ...(system ? [{ role: "system", content: system }] : []),
+    ...recent.map((m: any) => ({ ...m, content: m.content.slice(0, m.role === "user" ? 700 : 450) })),
+  ];
+  return parts.map((m: any) => `<|im_start|>${m.role}\n${m.content}\n<|im_end|>`).join("\n").slice(-1700) + "\n<|im_start|>assistant\n";
+}
+
+function textResponseAsAI(text: string, stream: boolean, _jsonMode = false) {
+  const clean = text
+    .split(/<\|im_start\|>|<\|im_end\|>|\n\s*(system|user|assistant)\s*\n/i)[0]
+    .replace(/<\|[^>]+\|>/g, "")
+    .trim() || "Estoy lista. ¿En qué te ayudo?";
+  if (stream) {
+    const encoder = new TextEncoder();
+    return new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: clean } }] })}\n\n`));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    }), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
+  }
+  return new Response(JSON.stringify({ choices: [{ message: { content: clean } }] }), {
+    headers: { ...corsHeaders, "content-type": "application/json" },
+  });
+}
+
+async function readJsonSafe(r: Response) {
+  const text = await r.text();
+  try { return JSON.parse(text); } catch { return null; }
+}
+
+async function stableHordeText(messages: any[]) {
+  const start = await fetchWithTimeout("https://stablehorde.net/api/v2/generate/text/async", {
+    method: "POST",
+    headers: { "content-type": "application/json", "apikey": HORDE_API_KEY, "Client-Agent": HORDE_CLIENT_AGENT },
+    body: JSON.stringify({
+      prompt: messagesToPrompt(messages),
+      params: { max_length: 220, max_context_length: 512, temperature: 0.7, top_p: 0.9, repetition_penalty: 1.08 },
+      trusted_workers: false,
+      models: ["aphrodite/TheDrummer/Anubis-70B-v1.2"],
+    }),
+  }, 12000);
+  const startJson = await readJsonSafe(start);
+  if (!start.ok || !startJson?.id) throw new Error(startJson?.message || startJson?.error || "Stable Horde no aceptó la petición.");
+  const id = String(startJson.id);
+  for (let i = 0; i < 16; i++) {
+    await new Promise((res) => setTimeout(res, i === 0 ? 1800 : 3000));
+    const status = await fetchWithTimeout(`https://stablehorde.net/api/v2/generate/text/status/${id}`, {
+      headers: { "Client-Agent": HORDE_CLIENT_AGENT },
+    }, 12000);
+    const statusJson = await readJsonSafe(status);
+    const text = statusJson?.generations?.[0]?.text;
+    if (text) return String(text);
+    if (statusJson?.faulted) throw new Error("Stable Horde falló generando texto.");
+  }
+  throw new Error("Stable Horde tardó demasiado.");
+}
+
+async function stableHordeJSON(messages: any[]) {
+  const text = await stableHordeText(messages);
+  return extractJsonObject(text);
+}
+
+async function freeAI(messages: any[], stream = false, jsonMode = false): Promise<Response> {
+  // Use the public Stable Horde text pool first; Pollinations often rate-limits anonymous traffic.
+  try {
+    const text = jsonMode ? JSON.stringify(await stableHordeJSON(messages)) : await stableHordeText(messages);
+    return textResponseAsAI(text, stream, jsonMode);
+  } catch (e) {
+    console.error("stable horde text fallback failed", String(e));
+    const r = await fetchWithTimeout(FREE_AI_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
+      body: JSON.stringify({ model: FREE_TEXT_FALLBACK_MODEL, messages, stream, ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
+    }, 8000).catch(() => null);
+    if (r?.ok) return r;
+    return aiErrorResponse(r?.status || 429, r ? await r.text().catch(() => "queue full") : "queue full", stream);
+  }
 }
 
 async function freeVisionAI(messages: any[], stream = false): Promise<Response> {
@@ -247,8 +317,8 @@ async function generatePublicImage(prompt: string) {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "apikey": "0000000000",
-      "Client-Agent": "OrionEstellar:1.0:Linky",
+      "apikey": HORDE_API_KEY,
+      "Client-Agent": HORDE_CLIENT_AGENT,
     },
     body: JSON.stringify({
       prompt,
