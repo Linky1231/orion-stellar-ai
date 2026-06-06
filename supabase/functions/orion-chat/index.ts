@@ -143,16 +143,15 @@ async function stableHordeText(messages: any[]) {
     headers: { "content-type": "application/json", "apikey": HORDE_API_KEY, "Client-Agent": HORDE_CLIENT_AGENT },
     body: JSON.stringify({
       prompt: messagesToPrompt(messages),
-      params: { max_length: 220, max_context_length: 512, temperature: 0.7, top_p: 0.9, repetition_penalty: 1.08 },
+        params: { max_length: 150, max_context_length: 512, temperature: 0.7, top_p: 0.9, repetition_penalty: 1.08 },
       trusted_workers: false,
-      models: ["aphrodite/TheDrummer/Anubis-70B-v1.2"],
     }),
   }, 12000);
   const startJson = await readJsonSafe(start);
   if (!start.ok || !startJson?.id) throw new Error(startJson?.message || startJson?.error || "Stable Horde no aceptó la petición.");
   const id = String(startJson.id);
-  for (let i = 0; i < 16; i++) {
-    await new Promise((res) => setTimeout(res, i === 0 ? 1800 : 3000));
+  for (let i = 0; i < 8; i++) {
+    await new Promise((res) => setTimeout(res, i === 0 ? 1500 : 2500));
     const status = await fetchWithTimeout(`https://stablehorde.net/api/v2/generate/text/status/${id}`, {
       headers: { "Client-Agent": HORDE_CLIENT_AGENT },
     }, 12000);
