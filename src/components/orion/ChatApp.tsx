@@ -330,7 +330,7 @@ function Welcome({ imageMode }: { imageMode: boolean }) {
         <span className="text-gradient-orion">Orión Estellar</span>
       </h1>
       <p className="text-sm text-muted-foreground mt-2 max-w-md">
-        {imageMode ? "Describe la imagen que quieres crear y la generaré con precisión." : "El asistente esencial para creadores indie. Programación, arte, diseño de niveles y mucho más."}
+        {imageMode ? "Describe la imagen que quieres crear y la generaré con precisión." : "La asistente esencial para creadores indie. Programación, arte, diseño de niveles y mucho más."}
       </p>
     </div>
   );
