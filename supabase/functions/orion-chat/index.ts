@@ -9,7 +9,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 const FREE_AI_URL = "https://text.pollinations.ai/openai";
 const FREE_TEXT_MODEL = "openai-fast";
 const FREE_TEXT_FALLBACK_MODEL = "openai";
@@ -47,7 +46,7 @@ function extractJsonObject(text: string) {
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false): Promise<Response> {
-  // Retry with backoff on 429 (Pollinations queue full), then try another free model before paid fallback.
+  // Retry with backoff on 429 (Pollinations queue full), then try another free model.
   let lastFreeResponse: Response | null = null;
   const freeModels = [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL];
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -67,22 +66,7 @@ async function freeAI(messages: any[], stream = false, jsonMode = false): Promis
     try { await r.body?.cancel(); } catch { /* ignore */ }
     await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
   }
-  // Fallback: Lovable AI Gateway
-  if (LOVABLE_API_KEY) {
-    const paidFallback = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "content-type": "application/json", "Lovable-API-Key": LOVABLE_API_KEY },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages,
-        stream,
-        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-      }),
-    });
-    if (paidFallback.status !== 402) return paidFallback;
-    try { await paidFallback.body?.cancel(); } catch { /* ignore */ }
-    if (lastFreeResponse) return lastFreeResponse;
-  }
+  if (lastFreeResponse) return lastFreeResponse;
   // Last resort: return the 429 so caller surfaces a clean error
   return fetch(FREE_AI_URL, {
     method: "POST",
@@ -92,6 +76,7 @@ async function freeAI(messages: any[], stream = false, jsonMode = false): Promis
 }
 
 async function freeVisionAI(messages: any[], stream = false): Promise<Response> {
+  let lastFreeResponse: Response | null = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     const r = await fetch(FREE_AI_URL, {
       method: "POST",
@@ -99,19 +84,15 @@ async function freeVisionAI(messages: any[], stream = false): Promise<Response> 
       body: JSON.stringify({ model: "openai", messages, stream }),
     });
     if (r.status !== 429) return r;
+    lastFreeResponse = r.clone();
     try { await r.body?.cancel(); } catch { /* ignore */ }
     await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
   }
-  return lovableAI(messages, stream, "google/gemini-2.5-flash");
+  return lastFreeResponse || freeAI(messages, stream);
 }
 
-async function lovableAI(messages: any[], stream = false, model = "google/gemini-2.5-flash") {
-  if (!LOVABLE_API_KEY) return freeAI(messages, stream);
-  return fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", "Lovable-API-Key": LOVABLE_API_KEY },
-    body: JSON.stringify({ model, messages, stream }),
-  });
+async function externalAI(messages: any[], stream = false) {
+  return freeAI(messages, stream);
 }
 
 function normalizeAiErrorText(text: string) {
@@ -148,7 +129,7 @@ function aiErrorResponse(status: number, text: string, stream = false) {
     });
   }
   if (status === 402 || message.toLowerCase().includes("not enough credits") || message.toLowerCase().includes("payment_required")) {
-    const safeMessage = "No hay créditos suficientes para completar esta acción. Añade saldo en Settings → Workspace → Cloud & AI balance.";
+    const safeMessage = "El proveedor externo no aceptó la petición ahora mismo. Inténtalo otra vez en unos segundos.";
     if (stream) {
       const encoder = new TextEncoder();
       return new Response(
@@ -162,7 +143,7 @@ function aiErrorResponse(status: number, text: string, stream = false) {
         { status: 200, headers: { ...corsHeaders, "content-type": "text/event-stream" } },
       );
     }
-    return new Response(JSON.stringify({ error: "PAYMENT_REQUIRED", message: safeMessage, fallback: false }), {
+    return new Response(JSON.stringify({ error: "EXTERNAL_PROVIDER_UNAVAILABLE", message: safeMessage, fallback: false }), {
       status: 200,
       headers: { ...corsHeaders, "content-type": "application/json" },
     });
@@ -285,106 +266,17 @@ Deno.serve(async (req) => {
       const enrichedPrompt = noteContext
         ? `${String(prompt || "imagen creativa")}. Contexto del proyecto indie del usuario: ${noteContext}. Mantén coherencia con esas notas.`
         : String(prompt || "imagen creativa");
-      let imgBytes: Uint8Array | null = null;
-      let contentType = "image/png";
-      let lastErr = "";
-      const lovableKey = Deno.env.get("LOVABLE_API_KEY");
       const finalPrompt = enrichedPrompt.slice(0, 1800);
-
-      // Lovable AI Gateway image endpoint. Body shape changes by model family.
-      const attempts: Array<{ model: string; body: any }> = lovableKey ? [
-        {
-          model: "openai/gpt-image-2",
-          body: {
-            model: "openai/gpt-image-2",
-            prompt: finalPrompt,
-            quality: "low",
-            size: "1024x1024",
-            n: 1,
-            response_format: "b64_json",
-          },
-        },
-        {
-          model: "google/gemini-3.1-flash-image-preview",
-          body: {
-            model: "google/gemini-3.1-flash-image-preview",
-            messages: [{ role: "user", content: finalPrompt }],
-            modalities: ["image", "text"],
-          },
-        },
-        {
-          model: "google/gemini-3-pro-image-preview",
-          body: {
-            model: "google/gemini-3-pro-image-preview",
-            messages: [{ role: "user", content: finalPrompt }],
-            modalities: ["image", "text"],
-          },
-        },
-        {
-          model: "google/gemini-2.5-flash-image",
-          body: {
-            model: "google/gemini-2.5-flash-image",
-            messages: [{ role: "user", content: finalPrompt }],
-            modalities: ["image", "text"],
-          },
-        },
-        {
-          model: "openai/gpt-image-1-mini",
-          body: {
-            model: "openai/gpt-image-1-mini",
-            prompt: finalPrompt,
-            quality: "low",
-            size: "1024x1024",
-            n: 1,
-            response_format: "b64_json",
-          },
-        },
-      ] : [];
-
-      for (const att of attempts) {
-        try {
-          const gw = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
-            method: "POST",
-            headers: { "content-type": "application/json", "Lovable-API-Key": lovableKey!, "X-Lovable-AIG-SDK": "orion-edge-function" },
-            body: JSON.stringify(att.body),
-          });
-          if (gw.ok) {
-            const j = await gw.json();
-            const b64 = findImageBase64(j);
-            if (b64) { imgBytes = base64ToBytes(b64); contentType = "image/png"; break; }
-            lastErr += ` | ${att.model}: sin imagen`;
-          } else {
-            const gwText = await gw.text().catch(() => "");
-            lastErr += ` | ${att.model} HTTP ${gw.status}${gwText ? `: ${gwText.slice(0, 200)}` : ""}`;
-          }
-        } catch (e) { lastErr += ` | ${att.model} error: ${String(e)}`; }
-      }
-
-      if (!imgBytes) {
-        console.warn("image generation failed", lastErr);
-        return new Response(JSON.stringify({
-          error: lastErr.includes("402") ? "PAYMENT_REQUIRED" : "IMAGE_GENERATION_UNAVAILABLE",
-          message: lastErr.includes("402")
-            ? "El generador de imágenes potente necesita créditos de Lovable AI para funcionar. Añade saldo en Settings → Workspace → Cloud & AI balance."
-            : `No se pudo generar la imagen: ${lastErr}`,
-          fallback: false,
-        }), { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } });
-      }
-      const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
-      const path = `generated/${crypto.randomUUID()}.${ext}`;
-      const up = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-attachments/${path}`, {
-        method: "POST",
-        headers: supabaseAdminHeaders({
-          "content-type": contentType,
-          "x-upsert": "false",
-        }),
-        body: imgBytes,
+      const seed = Math.floor(Math.random() * 1_000_000_000);
+      const params = new URLSearchParams({
+        width: "1024",
+        height: "1024",
+        seed: String(seed),
+        model: "flux",
+        nologo: "true",
+        enhance: "true",
       });
-      if (!up.ok) {
-        const t = await up.text();
-        return new Response(JSON.stringify({ error: `No se pudo guardar la imagen: ${t}` }), { status: 500, headers: { ...corsHeaders, "content-type": "application/json" } });
-      }
-      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/chat-attachments/${path}`;
+      const publicUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?${params.toString()}`;
       return new Response(JSON.stringify({ imageUrl: publicUrl }), {
         headers: { ...corsHeaders, "content-type": "application/json" },
       });
@@ -438,7 +330,7 @@ Deno.serve(async (req) => {
         }), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
       }
 
-      r = await lovableAI(visionMessages, true, "google/gemini-2.5-flash");
+      r = await externalAI(visionMessages, true);
       if (!r.ok) {
         const t = await r.text();
         return aiErrorResponse(r.status, t, true);
@@ -526,7 +418,7 @@ Reglas: directo, sin paja. Si la petición es ambigua, asume valores sensatos y 
           required: ["facts"],
         },
         "save_facts",
-        "google/gemini-2.5-flash-lite",
+        FREE_TEXT_FALLBACK_MODEL,
       );
       return new Response(JSON.stringify(out), { headers: { ...corsHeaders, "content-type": "application/json" } });
     }
