@@ -80,7 +80,7 @@ export async function generateImage(prompt: string): Promise<string> {
   let d: any = {};
   try { d = JSON.parse(text); } catch { throw new Error("El generador devolvió una respuesta inválida. Intenta de nuevo."); }
   if (!r.ok) throw new Error(d.message || d.error || `HTTP ${r.status}`);
-  if (!d.imageUrl) throw new Error(d.message || d.error || "No se pudo generar una imagen con esta petición.");
+  if (!d.imageUrl) throw new Error(d.message || d.error || "Pollinations no pudo generar la imagen ahora mismo.");
   return d.imageUrl;
 }
 

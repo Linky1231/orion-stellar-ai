@@ -9,6 +9,7 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const POLLINATIONS_API_KEY = Deno.env.get("POLLINATIONS_API_KEY");
 const FREE_AI_URL = "https://text.pollinations.ai/openai";
 const FREE_TEXT_MODEL = "openai-fast";
 const FREE_TEXT_FALLBACK_MODEL = "openai";
@@ -266,17 +267,10 @@ Deno.serve(async (req) => {
       const enrichedPrompt = noteContext
         ? `${String(prompt || "imagen creativa")}. Contexto del proyecto indie del usuario: ${noteContext}. Mantén coherencia con esas notas.`
         : String(prompt || "imagen creativa");
-      const finalPrompt = enrichedPrompt.slice(0, 1800);
-      const seed = Math.floor(Math.random() * 1_000_000_000);
-      const params = new URLSearchParams({
-        width: "1024",
-        height: "1024",
-        seed: String(seed),
-        model: "flux",
-        nologo: "true",
-        enhance: "true",
-      });
-      const publicUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?${params.toString()}`;
+      const finalPrompt = enrichedPrompt.slice(0, 1200);
+      const publicUrl = POLLINATIONS_API_KEY
+        ? `https://gen.pollinations.ai/image/${encodeURIComponent(finalPrompt)}?key=${encodeURIComponent(POLLINATIONS_API_KEY)}`
+        : `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}`;
       return new Response(JSON.stringify({ imageUrl: publicUrl }), {
         headers: { ...corsHeaders, "content-type": "application/json" },
       });
