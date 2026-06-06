@@ -33,28 +33,37 @@ async function streamFromBody(body: Record<string, unknown>, onDelta: (s: string
   const decoder = new TextDecoder();
   let buf = "";
   let done = false;
+  const readContent = (p: any) => p?.choices?.[0]?.delta?.content || p?.choices?.[0]?.message?.content || p?.message || p?.response || p?.text || "";
+  const processLine = (rawLine: string) => {
+    let line = rawLine;
+    if (line.endsWith("\r")) line = line.slice(0, -1);
+    if (!line.startsWith("data: ")) return false;
+    const json = line.slice(6).trim();
+    if (json === "[DONE]") return true;
+    try {
+      const p = JSON.parse(json);
+      const c = readContent(p);
+      if (c) onDelta(String(c));
+    } catch {
+      buf = line + "\n" + buf;
+      return true;
+    }
+    return false;
+  };
   while (!done) {
     const { value, done: d } = await reader.read();
     if (d) break;
     buf += decoder.decode(value, { stream: true });
     let idx;
     while ((idx = buf.indexOf("\n")) !== -1) {
-      let line = buf.slice(0, idx);
+      const line = buf.slice(0, idx);
       buf = buf.slice(idx + 1);
-      if (line.endsWith("\r")) line = line.slice(0, -1);
-      if (!line.startsWith("data: ")) continue;
-      const json = line.slice(6).trim();
-      if (json === "[DONE]") { done = true; break; }
-      try {
-        const p = JSON.parse(json);
-        const c = p.choices?.[0]?.delta?.content;
-        if (c) onDelta(c);
-      } catch {
-        buf = line + "\n" + buf;
-        break;
-      }
+      done = processLine(line);
+      if (done) break;
     }
   }
+  buf += decoder.decode();
+  if (buf.trim() && !done) processLine(buf.trim());
 }
 
 export async function streamChat(messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
