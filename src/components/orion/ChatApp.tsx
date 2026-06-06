@@ -227,10 +227,7 @@ export function ChatApp() {
             {messages.length === 0 && <Welcome imageMode={imageMode} />}
             {messages.map((m) => <Bubble key={m.id} m={m} />)}
             {streaming && messages[messages.length - 1]?.role !== "assistant" && (
-              <div className="flex gap-3">
-                <OrionLogo size={28} glow />
-                <div className="text-sm text-muted-foreground">Pensando…</div>
-              </div>
+              <ThinkingIndicator />
             )}
           </div>
         </div>
