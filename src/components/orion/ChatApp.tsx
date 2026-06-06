@@ -221,7 +221,28 @@ export function ChatApp() {
             <div className="font-semibold tracking-tight leading-tight">Orión Estellar</div>
             <div className="text-[11px] text-muted-foreground">v5.0 · por Linky</div>
           </div>
-          <div className="text-xs text-muted-foreground hidden sm:block">Free AI</div>
+          <button
+            onClick={async () => {
+              sfx.tap();
+              if (isIOS()) { toast.error("El modo voz no está disponible en iPhone."); return; }
+              if (!isAndroid()) { toast.error("El modo voz solo está disponible en Android."); return; }
+              const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+              if (!SR) { toast.error("Tu navegador no soporta reconocimiento de voz."); return; }
+              try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach((t) => t.stop());
+              } catch {
+                toast.error("Permiso de micrófono denegado. Habilítalo en los ajustes del navegador.");
+                return;
+              }
+              setVoiceOpen(true);
+            }}
+            className="tap btn-glass p-2 rounded-xl"
+            title="Modo voz"
+            aria-label="Modo voz"
+          >
+            <Mic className="w-5 h-5" />
+          </button>
         </header>
 
         {/* Messages */}
@@ -274,32 +295,6 @@ export function ChatApp() {
               </button>
               <button onClick={() => { sfx.tap(); setSearchMode((v) => !v); if (!searchMode) setImageMode(false); }} className={`tap p-2 rounded-xl ${searchMode ? "btn-cosmic" : "btn-glass"}`} title="Buscar info">
                 <Search className="w-4 h-4" />
-              </button>
-              <button
-                onClick={async () => {
-                  sfx.tap();
-                  if (!isAndroid() && !isIOS()) { toast.error("El modo voz solo está disponible en móvil (Android/iPhone)."); return; }
-                  const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-                  if (!SR) {
-                    toast.error(isIOS()
-                      ? "Tu versión de Safari no soporta reconocimiento de voz. Actualiza iOS a 16.4 o superior."
-                      : "Tu navegador no soporta reconocimiento de voz.");
-                    return;
-                  }
-                  // Solicitar el permiso del micrófono DENTRO del gesto del usuario (requerido por iOS Safari)
-                  try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    stream.getTracks().forEach((t) => t.stop());
-                  } catch {
-                    toast.error("Permiso de micrófono denegado. Habilítalo en Ajustes › Safari › Micrófono.");
-                    return;
-                  }
-                  setVoiceOpen(true);
-                }}
-                className="tap btn-glass p-2 rounded-xl"
-                title="Modo voz"
-              >
-                <Mic className="w-4 h-4" />
               </button>
               <button onClick={send} disabled={streaming} className="tap btn-cosmic p-2 rounded-xl disabled:opacity-50" title="Enviar">
                 <Send className="w-4 h-4" />
