@@ -227,10 +227,7 @@ export function ChatApp() {
             {messages.length === 0 && <Welcome imageMode={imageMode} />}
             {messages.map((m) => <Bubble key={m.id} m={m} />)}
             {streaming && messages[messages.length - 1]?.role !== "assistant" && (
-              <div className="flex gap-3">
-                <OrionLogo size={28} glow />
-                <div className="text-sm text-muted-foreground">Pensando…</div>
-              </div>
+              <ThinkingIndicator />
             )}
           </div>
         </div>
@@ -399,5 +396,32 @@ function SpeakBtn({ id, text }: { id: string; text: string }) {
     <button onClick={() => toggle(id, text)} className={`tap p-1 rounded hover:bg-accent ${active ? "text-primary" : ""}`} title={active ? "Detener" : "Leer"}>
       {active ? <Square className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
     </button>
+  );
+}
+
+function ThinkingIndicator() {
+  const phrases = ["Pensando", "Procesando", "Conectando ideas", "Casi listo"];
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((n) => (n + 1) % phrases.length), 2200);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="flex items-center gap-3 animate-fade-in">
+      <div className="relative">
+        <OrionLogo size={28} glow />
+        <span className="absolute inset-0 rounded-full animate-ping bg-primary/20" />
+      </div>
+      <div className="liquid-glass rounded-2xl px-4 py-2.5 flex items-center gap-2">
+        <span className="text-sm bg-gradient-to-r from-primary via-foreground to-primary bg-[length:200%_100%] bg-clip-text text-transparent animate-[shimmer_2.2s_linear_infinite]">
+          {phrases[i]}
+        </span>
+        <span className="flex gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+        </span>
+      </div>
+    </div>
   );
 }
