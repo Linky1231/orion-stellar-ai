@@ -119,28 +119,18 @@ async function stableHordeJSON(messages: any[]) {
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false): Promise<Response> {
-  // Retry the public text endpoint, then fall back to a different public provider.
-  let lastFreeResponse: Response | null = null;
-  const freeModels = [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL];
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const model = freeModels[Math.min(attempt, freeModels.length - 1)];
-    const r = await fetchWithTimeout(FREE_AI_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
-      body: JSON.stringify({ model, messages, stream, ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
-    }, 10000).catch(() => null);
-    if (!r) continue;
-    if (r.ok) return r;
-    lastFreeResponse = r.clone();
-    try { await r.body?.cancel(); } catch { /* ignore */ }
-    await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
-  }
+  // Use the public Stable Horde text pool first; Pollinations often rate-limits anonymous traffic.
   try {
     const text = jsonMode ? JSON.stringify(await stableHordeJSON(messages)) : await stableHordeText(messages);
     return textResponseAsAI(text, stream, jsonMode);
   } catch (_e) {
-    if (lastFreeResponse) return lastFreeResponse;
-    return aiErrorResponse(429, "queue full", stream);
+    const r = await fetchWithTimeout(FREE_AI_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
+      body: JSON.stringify({ model: FREE_TEXT_FALLBACK_MODEL, messages, stream, ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
+    }, 8000).catch(() => null);
+    if (r?.ok) return r;
+    return aiErrorResponse(r?.status || 429, r ? await r.text().catch(() => "queue full") : "queue full", stream);
   }
 }
 
