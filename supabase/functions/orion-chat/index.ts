@@ -129,7 +129,7 @@ function aiErrorResponse(status: number, text: string, stream = false) {
     });
   }
   if (status === 402 || message.toLowerCase().includes("not enough credits") || message.toLowerCase().includes("payment_required")) {
-    const safeMessage = "No hay créditos suficientes para completar esta acción. Añade saldo en Settings → Workspace → Cloud & AI balance.";
+    const safeMessage = "El proveedor externo no aceptó la petición ahora mismo. Inténtalo otra vez en unos segundos.";
     if (stream) {
       const encoder = new TextEncoder();
       return new Response(
@@ -143,7 +143,7 @@ function aiErrorResponse(status: number, text: string, stream = false) {
         { status: 200, headers: { ...corsHeaders, "content-type": "text/event-stream" } },
       );
     }
-    return new Response(JSON.stringify({ error: "PAYMENT_REQUIRED", message: safeMessage, fallback: false }), {
+    return new Response(JSON.stringify({ error: "EXTERNAL_PROVIDER_UNAVAILABLE", message: safeMessage, fallback: false }), {
       status: 200,
       headers: { ...corsHeaders, "content-type": "application/json" },
     });
