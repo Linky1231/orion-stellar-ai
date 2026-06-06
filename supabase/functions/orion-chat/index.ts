@@ -589,7 +589,7 @@ REGLAS ESTRICTAS:
 
 ESTILO: inteligente, elegante, analítico, preciso, profesional, directo. Nunca infantil, emocional ni complaciente. Siéntete como una productora AI especializada en videojuegos indie.` },
         { role: "user", content: `Notas del proyecto:\n\n${(notes || []).map((n: any) => `### [${n.status}] ${n.category || "?"} — ${n.title}\n${n.content}\n(Última actividad: ${n.last_activity})`).join("\n\n")}` },
-      ]);
+      ], false, false, 4096);
       if (!r.ok) {
         const t = await r.text();
         return aiErrorResponse(r.status, t);
