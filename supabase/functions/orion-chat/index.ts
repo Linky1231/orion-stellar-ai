@@ -242,6 +242,36 @@ function findImageBase64(value: any): string | null {
   return null;
 }
 
+async function generatePublicImage(prompt: string) {
+  const start = await fetch("https://stablehorde.net/api/v2/generate/async", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "apikey": "0000000000",
+      "Client-Agent": "OrionEstellar:1.0:Linky",
+    },
+    body: JSON.stringify({
+      prompt,
+      params: { n: 1, width: 512, height: 512, steps: 12, cfg_scale: 7, sampler_name: "k_euler" },
+      nsfw: false,
+      censor_nsfw: true,
+      trusted_workers: false,
+    }),
+  });
+  const startJson = await safeJson(start);
+  if (!start.ok || !startJson?.id) throw new Error(startJson?.message || startJson?.error || "El proveedor público rechazó la petición.");
+  const id = String(startJson.id);
+  for (let i = 0; i < 24; i++) {
+    await new Promise((res) => setTimeout(res, i === 0 ? 2500 : 5000));
+    const status = await fetch(`https://stablehorde.net/api/v2/generate/status/${id}`);
+    const statusJson = await safeJson(status);
+    const generation = statusJson?.generations?.[0];
+    if (generation?.img) return String(generation.img);
+    if (statusJson?.faulted) throw new Error("El proveedor público falló generando la imagen.");
+  }
+  throw new Error("El proveedor público tardó demasiado. Intenta de nuevo.");
+}
+
 async function aiJSON(messages: any[], schema: any, name: string, _model = FREE_TEXT_MODEL) {
   const r = await freeAI([
     { role: "system", content: `Devuelve únicamente JSON válido para la función ${name}, sin markdown ni explicación. Esquema esperado: ${JSON.stringify(schema)}` },
