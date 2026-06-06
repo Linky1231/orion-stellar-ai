@@ -128,14 +128,14 @@ async function stableHordeJSON(messages: any[]) {
   return extractJsonObject(text);
 }
 
-async function freeAI(messages: any[], stream = false, jsonMode = false): Promise<Response> {
+async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 4096): Promise<Response> {
   // Try Pollinations first (fast, streams). Fallback to Stable Horde only if it fails.
   for (const model of [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL]) {
     const r = await fetchWithTimeout(FREE_AI_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
-      body: JSON.stringify({ model, messages, stream, ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
-    }, 9000).catch(() => null);
+      body: JSON.stringify({ model, messages, stream, max_tokens: maxTokens, ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
+    }, stream ? 12000 : 45000).catch(() => null);
     if (r?.ok) return r;
     if (r) { try { await r.body?.cancel(); } catch { /* ignore */ } }
   }
