@@ -43,6 +43,7 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
   const silenceTimerRef = useRef<number | null>(null);
   const processingRef = useRef(false);
   const shouldListenRef = useRef(false);
+  const micStartedRef = useRef(false);
 
   useEffect(() => { convRef.current = convId; }, [convId]);
   useEffect(() => { stateRef.current = state; }, [state]);
@@ -89,7 +90,10 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
     clearInactivity();
     inactivityTimerRef.current = window.setTimeout(() => {
       shouldListenRef.current = false;
-      try { recogRef.current?.abort?.(); } catch {}
+      const r = recogRef.current;
+      recogRef.current = null;
+      micStartedRef.current = false;
+      try { r?.abort?.(); } catch {}
       window.speechSynthesis.cancel();
       setError("Sin actividad durante 17s. Modo voz pausado.");
       setState("idle");
@@ -99,11 +103,8 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
   const startRecognition = useCallback(() => {
     const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) { setError("Reconocimiento de voz no soportado en este navegador."); return; }
-    // Evita múltiples instancias activas del micrófono
-    if (recogRef.current) {
-      try { recogRef.current.abort?.(); } catch {}
-      recogRef.current = null;
-    }
+    // Una ventana de escucha = una sola activación de micrófono durante 17s.
+    if (micStartedRef.current || recogRef.current) return;
     const r = new SR();
     r.lang = "es-ES";
     r.continuous = true;
@@ -145,17 +146,28 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         setError("Permiso de micrófono denegado.");
         shouldListenRef.current = false;
+        if (recogRef.current === r) recogRef.current = null;
+        micStartedRef.current = false;
         clearInactivity();
         setState("idle");
       }
     };
     r.onend = () => {
-      if (shouldListenRef.current && !processingRef.current && recogRef.current === r) {
-        try { r.start(); } catch {}
+      if (recogRef.current === r) {
+        recogRef.current = null;
+        micStartedRef.current = false;
       }
     };
     recogRef.current = r;
-    try { r.start(); setState("listening"); armInactivity(); } catch {}
+    try {
+      micStartedRef.current = true;
+      r.start();
+      setState("listening");
+      armInactivity();
+    } catch {
+      recogRef.current = null;
+      micStartedRef.current = false;
+    }
   }, []);
 
   const stopRecognition = useCallback(() => {
