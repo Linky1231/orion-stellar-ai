@@ -28,6 +28,7 @@ export function ChatApp() {
   const [debugOpen, setDebugOpen] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
   const [convId, setConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DBMsg[]>([]);
   const [input, setInput] = useState("");
