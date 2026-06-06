@@ -433,6 +433,64 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { mode, messages, prompt, deviceId, text, notes } = body as any;
 
+    // Diagnostics: probe each provider with a tiny prompt
+    if (mode === "diagnose") {
+      const probe = [
+        { role: "system", content: "Responde solo con: ok" },
+        { role: "user", content: "ping" },
+      ];
+      const time = async (fn: () => Promise<any>) => {
+        const t0 = Date.now();
+        try {
+          const r = await fn();
+          return { ok: !!r?.ok, ms: Date.now() - t0, sample: String(r?.sample || "").slice(0, 80), error: r?.error || null };
+        } catch (e) {
+          return { ok: false, ms: Date.now() - t0, sample: "", error: String(e).slice(0, 200) };
+        }
+      };
+
+      const results: Record<string, any> = {};
+      results.lovable = await time(async () => {
+        const key = Deno.env.get("LOVABLE_API_KEY");
+        if (!key) return { ok: false, error: "LOVABLE_API_KEY no configurada" };
+        const r = await lovableAI(probe, false, false, 50);
+        if (!r) return { ok: false, error: "sin respuesta (créditos agotados o error)" };
+        const d = await safeJson(r);
+        return { ok: true, sample: d?.choices?.[0]?.message?.content || "" };
+      });
+      results.pollinations = await time(async () => {
+        const r = await fetchWithTimeout(FREE_AI_URL, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ model: FREE_TEXT_MODEL, messages: probe, max_tokens: 20 }),
+        }, 6000);
+        if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
+        const d = await safeJson(r);
+        return { ok: true, sample: d?.choices?.[0]?.message?.content || "" };
+      });
+      results.stableHorde = await time(async () => {
+        const t = await stableHordeText(probe);
+        return { ok: true, sample: t };
+      });
+      results.database = await time(async () => {
+        const r = await sb("orion_config?select=id&limit=1");
+        if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
+        return { ok: true, sample: "conectado" };
+      });
+
+      return new Response(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        env: {
+          LOVABLE_API_KEY: !!Deno.env.get("LOVABLE_API_KEY"),
+          SUPABASE_URL: !!SUPABASE_URL,
+          SUPABASE_SERVICE_ROLE_KEY: !!SUPABASE_SERVICE_ROLE_KEY,
+        },
+        results,
+      }), { headers: { ...corsHeaders, "content-type": "application/json" } });
+    }
+
+
+
     // Image generation
     if (mode === "image") {
       const userNotes = await getUserNotes(deviceId);
