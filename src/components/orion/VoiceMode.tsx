@@ -293,12 +293,22 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
           {label}
         </div>
 
-        <div className="min-h-[80px] max-w-md w-full">
+        <div className="min-h-[100px] max-w-md w-full space-y-2">
           {state === "speaking" && reply && (
             <div className="text-base text-foreground leading-relaxed line-clamp-6">{reply}</div>
           )}
-          {state !== "speaking" && transcript && (
-            <div className="text-base text-muted-foreground italic leading-relaxed line-clamp-4">"{transcript}"</div>
+          {state !== "speaking" && (
+            <div className="rounded-2xl border border-border bg-card/40 px-4 py-3 min-h-[64px] flex items-center justify-center">
+              {transcript ? (
+                <div className="text-base text-foreground leading-relaxed line-clamp-4">
+                  <span className="text-muted-foreground">»</span> {transcript}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground italic">
+                  {state === "listening" ? "Te estoy escuchando…" : state === "thinking" ? "Procesando…" : "Esperando…"}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
