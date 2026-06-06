@@ -636,9 +636,10 @@ ESTILO: inteligente, elegante, analítico, preciso, profesional, directo. Nunca 
     const memText = mem.length ? `\n\n## Contexto personal del usuario (memoria a largo plazo):\n${mem.map((m: any) => `- [${m.kind}] ${m.content}`).join("\n")}` : "";
     const notesText = userNotes.length ? `\n\n## Notas del proyecto del usuario:\n${userNotes.map((n: any) => `- (${n.section}/${n.status}/${n.category || "?"}) ${n.title}: ${n.ai_summary || n.content?.slice(0, 200)}`).join("\n")}` : "";
 
-    const systemPrompt = `${cfg.context || ""}\n\nPersonalidad: ${cfg.personality || ""}\n\nComportamiento: ${cfg.behavior || ""}${kbText}${refText}${memText}${notesText}\n\nUsa el contexto personal y las notas para personalizar tus respuestas. Cuando sea relevante, haz referencia a lo que sabes del usuario y su proyecto.`;
+    const lengthRule = `\n\nREGLA DE LONGITUD ESTRICTA: Toda respuesta debe tener un MÁXIMO de 600 caracteres (incluyendo espacios). Sé conciso, directo y elimina relleno. Nunca excedas 600 caracteres bajo ninguna circunstancia.`;
+    const systemPrompt = `${cfg.context || ""}\n\nPersonalidad: ${cfg.personality || ""}\n\nComportamiento: ${cfg.behavior || ""}${kbText}${refText}${memText}${notesText}\n\nUsa el contexto personal y las notas para personalizar tus respuestas. Cuando sea relevante, haz referencia a lo que sabes del usuario y su proyecto.${lengthRule}`;
 
-    const r = await freeAI([{ role: "system", content: systemPrompt }, ...(messages || [])], true);
+    const r = await freeAI([{ role: "system", content: systemPrompt }, ...(messages || [])], true, false, 250);
 
     if (!r.ok) {
       const t = await r.text();
