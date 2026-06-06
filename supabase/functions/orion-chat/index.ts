@@ -91,7 +91,7 @@ async function freeVisionAI(messages: any[], stream = false): Promise<Response> 
   return lastFreeResponse || freeAI(messages, stream);
 }
 
-async function lovableAI(messages: any[], stream = false, model = "google/gemini-2.5-flash") {
+async function externalAI(messages: any[], stream = false) {
   return freeAI(messages, stream);
 }
 
@@ -330,7 +330,7 @@ Deno.serve(async (req) => {
         }), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
       }
 
-      r = await lovableAI(visionMessages, true, "google/gemini-2.5-flash");
+      r = await externalAI(visionMessages, true);
       if (!r.ok) {
         const t = await r.text();
         return aiErrorResponse(r.status, t, true);
@@ -418,7 +418,7 @@ Reglas: directo, sin paja. Si la petición es ambigua, asume valores sensatos y 
           required: ["facts"],
         },
         "save_facts",
-        "google/gemini-2.5-flash-lite",
+        FREE_TEXT_FALLBACK_MODEL,
       );
       return new Response(JSON.stringify(out), { headers: { ...corsHeaders, "content-type": "application/json" } });
     }
