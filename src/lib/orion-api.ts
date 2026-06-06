@@ -132,3 +132,19 @@ export async function analyzeProject(notes: any[]): Promise<string> {
   const d = await r.json();
   return d.analysis || "";
 }
+
+export type DiagnosticsResult = {
+  timestamp: string;
+  env: Record<string, boolean>;
+  results: Record<string, { ok: boolean; ms: number; sample: string; error: string | null }>;
+};
+
+export async function runDiagnostics(): Promise<DiagnosticsResult> {
+  const t0 = performance.now();
+  const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ mode: "diagnose" }) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const data = await r.json();
+  (data as any).roundTripMs = Math.round(performance.now() - t0);
+  return data;
+}
+
