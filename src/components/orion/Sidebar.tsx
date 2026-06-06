@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
-import { Search, Plus, Trash2, Pencil, MessageSquare, StickyNote, X, ImagePlus, Bug, Code2 } from "lucide-react";
+import { Search, Plus, Trash2, Pencil, MessageSquare, StickyNote, X, ImagePlus, Bug, Code2, Activity } from "lucide-react";
 import { OrionLogo } from "./OrionLogo";
 
 type Conv = { id: string; title: string; updated_at: string };
@@ -16,6 +16,7 @@ export function Sidebar({
   onOpenNotes,
   onOpenDebug,
   onOpenCode,
+  onOpenDiagnostics,
   onCreateImage,
 }: {
   open: boolean;
@@ -26,6 +27,7 @@ export function Sidebar({
   onOpenNotes: () => void;
   onOpenDebug: () => void;
   onOpenCode: () => void;
+  onOpenDiagnostics: () => void;
   onCreateImage: () => void;
 }) {
   const [convs, setConvs] = useState<Conv[]>([]);
@@ -125,7 +127,14 @@ export function Sidebar({
           >
             <Code2 className="w-4 h-4 text-primary" /> Modo Code
           </button>
+          <button
+            onClick={() => { sfx.open(); onOpenDiagnostics(); }}
+            className="w-full tap btn-glass flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm"
+          >
+            <Activity className="w-4 h-4 text-primary" /> Diagnóstico del chat
+          </button>
         </div>
+
 
         <div className="px-3 pb-2">
           <div className="relative">

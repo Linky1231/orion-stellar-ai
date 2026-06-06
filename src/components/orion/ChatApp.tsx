@@ -10,6 +10,7 @@ import { NotesPanel } from "./NotesPanel";
 import { DebugPanel } from "./DebugPanel";
 import { CodePanel } from "./CodePanel";
 import { AdminPanel } from "./AdminPanel";
+import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X, AlertTriangle, Sparkles } from "lucide-react";
 
 const SpeechCtx = createContext<{ speakingId: string | null; toggle: (id: string, text: string) => void }>({ speakingId: null, toggle: () => {} });
@@ -27,6 +28,7 @@ export function ChatApp() {
   const [debugOpen, setDebugOpen] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
   const [convId, setConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DBMsg[]>([]);
   const [input, setInput] = useState("");
@@ -202,6 +204,7 @@ export function ChatApp() {
         onOpenNotes={() => setNotesOpen(true)}
         onOpenDebug={() => setDebugOpen(true)}
         onOpenCode={() => setCodeOpen(true)}
+        onOpenDiagnostics={() => setDiagOpen(true)}
         onCreateImage={() => { newConv(); setImageMode(true); }}
       />
 
@@ -284,6 +287,7 @@ export function ChatApp() {
       <DebugPanel open={debugOpen} onClose={() => setDebugOpen(false)} />
       <CodePanel open={codeOpen} onClose={() => setCodeOpen(false)} />
       <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
+      <DiagnosticsPanel open={diagOpen} onClose={() => setDiagOpen(false)} />
     </div>
     </SpeechCtx.Provider>
   );
