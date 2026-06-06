@@ -329,7 +329,7 @@ function Bubble({ m }: { m: DBMsg }) {
       <div className={`max-w-[85%] ${isUser ? "items-end" : "items-start"} flex flex-col gap-1.5`}>
         {(m.attachments || []).map((a: any, i) => (
           a.type?.startsWith("image") ? (
-            <img key={i} src={a.url} alt="" className="rounded-2xl max-h-80 border border-border shadow-soft" />
+            <GeneratedImage key={i} src={a.url} />
           ) : (
             <a key={i} href={a.url} target="_blank" className="text-xs underline">{a.name}</a>
           )
@@ -358,6 +358,33 @@ function Bubble({ m }: { m: DBMsg }) {
       </div>
     </div>
   );
+}
+
+function GeneratedImage({ src }: { src: string }) {
+  const [url, setUrl] = useState(src);
+  const [tries, setTries] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  function retry() {
+    if (tries >= 2) {
+      setFailed(true);
+      return;
+    }
+    try {
+      const next = new URL(src);
+      next.searchParams.set("seed", String(Date.now()));
+      setUrl(next.toString());
+    } catch {
+      setUrl(`${src}${src.includes("?") ? "&" : "?"}retry=${Date.now()}`);
+    }
+    setTries((n) => n + 1);
+  }
+
+  if (failed) {
+    return <div className="liquid-glass rounded-2xl border border-border px-4 py-3 text-sm text-muted-foreground">El generador gratuito está saturado. Intenta de nuevo en unos segundos.</div>;
+  }
+
+  return <img src={url} alt="Imagen generada" onError={retry} className="rounded-2xl max-h-80 border border-border shadow-soft" />;
 }
 
 function SpeakBtn({ id, text }: { id: string; text: string }) {
