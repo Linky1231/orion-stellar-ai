@@ -270,7 +270,19 @@ export function VoiceMode({ open, onClose, convId, ensureConv, onMessagesChanged
       setTranscript("");
       processingRef.current = false;
       shouldListenRef.current = true;
-      startRecognition();
+      (async () => {
+        try {
+          if (navigator.mediaDevices?.getUserMedia) {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Release immediately; SpeechRecognition opens its own capture.
+            stream.getTracks().forEach((t) => t.stop());
+          }
+          startRecognition();
+        } catch {
+          setError("No se pudo acceder al micrófono. Revisa los permisos del navegador.");
+          setState("idle");
+        }
+      })();
     } else {
       stopRecognition();
       window.speechSynthesis.cancel();
