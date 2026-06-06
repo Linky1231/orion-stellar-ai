@@ -81,6 +81,11 @@ function textResponseAsAI(text: string, stream: boolean, _jsonMode = false) {
   });
 }
 
+async function readJsonSafe(r: Response) {
+  const text = await r.text();
+  try { return JSON.parse(text); } catch { return null; }
+}
+
 async function stableHordeText(messages: any[]) {
   const start = await fetchWithTimeout("https://stablehorde.net/api/v2/generate/text/async", {
     method: "POST",
@@ -92,7 +97,7 @@ async function stableHordeText(messages: any[]) {
       models: ["aphrodite/TheDrummer/Anubis-70B-v1.2"],
     }),
   }, 12000);
-  const startJson = await safeJson(start);
+  const startJson = await readJsonSafe(start);
   if (!start.ok || !startJson?.id) throw new Error(startJson?.message || startJson?.error || "Stable Horde no aceptó la petición.");
   const id = String(startJson.id);
   for (let i = 0; i < 16; i++) {
@@ -100,7 +105,7 @@ async function stableHordeText(messages: any[]) {
     const status = await fetchWithTimeout(`https://stablehorde.net/api/v2/generate/text/status/${id}`, {
       headers: { "Client-Agent": HORDE_CLIENT_AGENT },
     }, 12000);
-    const statusJson = await safeJson(status);
+    const statusJson = await readJsonSafe(status);
     const text = statusJson?.generations?.[0]?.text;
     if (text) return String(text);
     if (statusJson?.faulted) throw new Error("Stable Horde falló generando texto.");
