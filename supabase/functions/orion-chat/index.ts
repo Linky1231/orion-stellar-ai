@@ -128,14 +128,14 @@ async function stableHordeJSON(messages: any[]) {
   return extractJsonObject(text);
 }
 
-async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 4096): Promise<Response> {
+async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
   // Try Pollinations first (fast, streams). Fallback to Stable Horde only if it fails.
   for (const model of [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL]) {
     const r = await fetchWithTimeout(FREE_AI_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
       body: JSON.stringify({ model, messages, stream, max_tokens: maxTokens, ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
-    }, stream ? 12000 : 45000).catch(() => null);
+    }, stream ? 90000 : 90000).catch(() => null);
     if (r?.ok) return r;
     if (r) { try { await r.body?.cancel(); } catch { /* ignore */ } }
   }
@@ -268,6 +268,25 @@ function stripReasoningStream(body: ReadableStream<Uint8Array> | null) {
         } catch {
           // Drop malformed partial events; the next chunk will contain a complete line.
         }
+      }
+    },
+    flush(controller) {
+      const line = buffer.trim();
+      if (!line.startsWith("data: ")) return;
+      const json = line.slice(6).trim();
+      if (json === "[DONE]") {
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        return;
+      }
+      try {
+        const event = JSON.parse(json);
+        const delta = event.choices?.[0]?.delta;
+        if (!delta?.content) return;
+        delete delta.reasoning;
+        delete delta.reasoning_content;
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      } catch {
+        // Ignore incomplete trailing data.
       }
     },
   }));
