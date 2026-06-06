@@ -10,7 +10,9 @@ import { NotesPanel } from "./NotesPanel";
 import { DebugPanel } from "./DebugPanel";
 import { CodePanel } from "./CodePanel";
 import { AdminPanel } from "./AdminPanel";
-import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X, AlertTriangle, Sparkles } from "lucide-react";
+import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X, AlertTriangle, Sparkles, Mic } from "lucide-react";
+import { VoiceMode, isAndroid, isIOS } from "./VoiceMode";
+import { toast } from "sonner";
 
 const SpeechCtx = createContext<{ speakingId: string | null; toggle: (id: string, text: string) => void }>({ speakingId: null, toggle: () => {} });
 
@@ -27,6 +29,7 @@ export function ChatApp() {
   const [debugOpen, setDebugOpen] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const [convId, setConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DBMsg[]>([]);
   const [input, setInput] = useState("");
@@ -272,6 +275,18 @@ export function ChatApp() {
               <button onClick={() => { sfx.tap(); setSearchMode((v) => !v); if (!searchMode) setImageMode(false); }} className={`tap p-2 rounded-lg ${searchMode ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`} title="Buscar info">
                 <Search className="w-4 h-4" />
               </button>
+              <button
+                onClick={() => {
+                  sfx.tap();
+                  if (isIOS()) { toast.error("El modo voz no está disponible en iOS."); return; }
+                  if (!isAndroid()) { toast.error("El modo voz solo está disponible en Android."); return; }
+                  setVoiceOpen(true);
+                }}
+                className="tap p-2 rounded-lg hover:bg-accent"
+                title="Modo voz"
+              >
+                <Mic className="w-4 h-4" />
+              </button>
               <button onClick={send} disabled={streaming} className="tap p-2 rounded-lg gradient-orion text-primary-foreground disabled:opacity-50 shadow-glow" title="Enviar">
                 <Send className="w-4 h-4" />
               </button>
@@ -285,6 +300,13 @@ export function ChatApp() {
       <DebugPanel open={debugOpen} onClose={() => setDebugOpen(false)} />
       <CodePanel open={codeOpen} onClose={() => setCodeOpen(false)} />
       <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
+      <VoiceMode
+        open={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+        convId={convId}
+        ensureConv={ensureConv}
+        onMessagesChanged={() => { if (convId) loadMessages(convId); }}
+      />
     </div>
     </SpeechCtx.Provider>
   );
