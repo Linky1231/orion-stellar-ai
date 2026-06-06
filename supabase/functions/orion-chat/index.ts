@@ -267,7 +267,41 @@ Deno.serve(async (req) => {
         ? `${String(prompt || "imagen creativa")}. Contexto del proyecto indie del usuario: ${noteContext}. Mantén coherencia con esas notas.`
         : String(prompt || "imagen creativa");
       const finalPrompt = `${enrichedPrompt}. high quality digital art`.slice(0, 1200);
-      const publicUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}`;
+      const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}`;
+      let imgBytes: Uint8Array | null = null;
+      let contentType = "image/jpeg";
+      let lastErr = "";
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const imgRes = await fetch(pollinationsUrl);
+        contentType = imgRes.headers.get("content-type") || contentType;
+        if (imgRes.ok && contentType.startsWith("image/")) {
+          imgBytes = new Uint8Array(await imgRes.arrayBuffer());
+          break;
+        }
+        lastErr = await imgRes.text().catch(() => `HTTP ${imgRes.status}`);
+        try { await imgRes.body?.cancel(); } catch { /* ignore */ }
+        if (imgRes.status !== 402 && imgRes.status !== 429) break;
+        await new Promise((res) => setTimeout(res, 6000 + attempt * 2500));
+      }
+      if (!imgBytes) {
+        return new Response(JSON.stringify({
+          error: "IMAGE_PROVIDER_BUSY",
+          message: "Pollinations está saturado ahora mismo. Espera unos segundos y vuelve a generar la imagen.",
+          details: lastErr.slice(0, 240),
+        }), { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } });
+      }
+      const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+      const path = `generated/${crypto.randomUUID()}.${ext}`;
+      const up = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-attachments/${path}`, {
+        method: "POST",
+        headers: supabaseAdminHeaders({ "content-type": contentType, "x-upsert": "false" }),
+        body: imgBytes,
+      });
+      if (!up.ok) {
+        const t = await up.text();
+        return new Response(JSON.stringify({ error: `No se pudo guardar la imagen: ${t}` }), { status: 500, headers: { ...corsHeaders, "content-type": "application/json" } });
+      }
+      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/chat-attachments/${path}`;
       return new Response(JSON.stringify({ imageUrl: publicUrl }), {
         headers: { ...corsHeaders, "content-type": "application/json" },
       });
