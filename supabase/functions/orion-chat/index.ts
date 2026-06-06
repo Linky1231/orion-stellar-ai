@@ -297,9 +297,22 @@ Deno.serve(async (req) => {
         ? `${String(prompt || "imagen creativa")}. Contexto del proyecto indie del usuario: ${noteContext}. Mantén coherencia con esas notas.`
         : String(prompt || "imagen creativa");
       const finalPrompt = enrichedPrompt.slice(0, 1200);
-      const publicUrl = POLLINATIONS_API_KEY
-        ? `https://gen.pollinations.ai/image/${encodeURIComponent(finalPrompt)}?key=${encodeURIComponent(POLLINATIONS_API_KEY)}`
-        : `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}`;
+      const externalUrl = await generatePublicImage(finalPrompt);
+      const imgRes = await fetch(externalUrl);
+      if (!imgRes.ok) throw new Error("No se pudo descargar la imagen generada.");
+      const contentType = imgRes.headers.get("content-type") || "image/webp";
+      const ext = contentType.includes("png") ? "png" : contentType.includes("jpeg") || contentType.includes("jpg") ? "jpg" : "webp";
+      const path = `generated/${crypto.randomUUID()}.${ext}`;
+      const up = await fetch(`${SUPABASE_URL}/storage/v1/object/chat-attachments/${path}`, {
+        method: "POST",
+        headers: supabaseAdminHeaders({ "content-type": contentType, "x-upsert": "false" }),
+        body: new Uint8Array(await imgRes.arrayBuffer()),
+      });
+      if (!up.ok) {
+        const t = await up.text();
+        throw new Error(`No se pudo guardar la imagen: ${t}`);
+      }
+      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/chat-attachments/${path}`;
       return new Response(JSON.stringify({ imageUrl: publicUrl }), {
         headers: { ...corsHeaders, "content-type": "application/json" },
       });
