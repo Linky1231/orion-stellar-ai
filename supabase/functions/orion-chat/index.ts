@@ -111,9 +111,12 @@ function messagesToPrompt(messages: any[]) {
 
 function textResponseAsAI(text: string, stream: boolean, _jsonMode = false) {
   const clean = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<think>[\s\S]*/gi, "")
     .split(/<\|im_start\|>|<\|im_end\|>|\n\s*(system|user|assistant)\s*\n/i)[0]
     .replace(/<\|[^>]+\|>/g, "")
-    .trim() || "Estoy lista. ¿En qué te ayudo?";
+    .trim()
+    .slice(0, 600) || "Estoy lista. ¿En qué te ayudo?";
   if (stream) {
     const encoder = new TextEncoder();
     return new Response(new ReadableStream({
@@ -184,6 +187,15 @@ async function freeAI(messages: any[], stream = false, jsonMode = false, maxToke
       if (!retryable) break;
       await new Promise((res) => setTimeout(res, 1200 * (attempt + 1)));
     }
+  }
+  try {
+    const hordeText = await stableHordeText([
+      { role: "system", content: "Responde en español, máximo 600 caracteres. No muestres razonamiento interno ni etiquetas <think>." },
+      ...messages,
+    ]);
+    return textResponseAsAI(hordeText, stream, jsonMode);
+  } catch (e) {
+    console.error("stable horde text fallback failed", String(e));
   }
   return quickFallback(stream);
 }
