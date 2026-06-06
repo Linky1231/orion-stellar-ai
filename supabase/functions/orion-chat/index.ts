@@ -47,6 +47,7 @@ function extractJsonObject(text: string) {
 
 async function freeAI(messages: any[], stream = false, jsonMode = false): Promise<Response> {
   // Retry with backoff on 429 (Pollinations queue full), then fall back to Lovable AI
+  let lastFreeResponse: Response | null = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     const r = await fetch(FREE_AI_URL, {
       method: "POST",
@@ -59,12 +60,13 @@ async function freeAI(messages: any[], stream = false, jsonMode = false): Promis
       }),
     });
     if (r.status !== 429) return r;
+    lastFreeResponse = r.clone();
     try { await r.body?.cancel(); } catch { /* ignore */ }
     await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
   }
   // Fallback: Lovable AI Gateway
   if (LOVABLE_API_KEY) {
-    return fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const paidFallback = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { "content-type": "application/json", "Lovable-API-Key": LOVABLE_API_KEY },
       body: JSON.stringify({
@@ -74,6 +76,9 @@ async function freeAI(messages: any[], stream = false, jsonMode = false): Promis
         ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
     });
+    if (paidFallback.status !== 402) return paidFallback;
+    try { await paidFallback.body?.cancel(); } catch { /* ignore */ }
+    if (lastFreeResponse) return lastFreeResponse;
   }
   // Last resort: return the 429 so caller surfaces a clean error
   return fetch(FREE_AI_URL, {
