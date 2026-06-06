@@ -10,9 +10,7 @@ import { NotesPanel } from "./NotesPanel";
 import { DebugPanel } from "./DebugPanel";
 import { CodePanel } from "./CodePanel";
 import { AdminPanel } from "./AdminPanel";
-import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X, AlertTriangle, Sparkles, Mic } from "lucide-react";
-import { VoiceMode, isAndroid, isIOS } from "./VoiceMode";
-import { toast } from "sonner";
+import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X, AlertTriangle, Sparkles } from "lucide-react";
 
 const SpeechCtx = createContext<{ speakingId: string | null; toggle: (id: string, text: string) => void }>({ speakingId: null, toggle: () => {} });
 
@@ -29,7 +27,6 @@ export function ChatApp() {
   const [debugOpen, setDebugOpen] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
-  const [voiceOpen, setVoiceOpen] = useState(false);
   const [convId, setConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DBMsg[]>([]);
   const [input, setInput] = useState("");
@@ -221,29 +218,8 @@ export function ChatApp() {
             <div className="font-semibold tracking-tight leading-tight">Orión Estellar</div>
             <div className="text-[11px] text-muted-foreground">v5.0 · por Linky</div>
           </div>
-          <button
-            onClick={async () => {
-              sfx.tap();
-              if (isIOS()) { toast.error("El modo voz no está disponible en iPhone."); return; }
-              if (!isAndroid()) { toast.error("El modo voz solo está disponible en Android."); return; }
-              const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-              if (!SR) { toast.error("Tu navegador no soporta reconocimiento de voz."); return; }
-              try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                stream.getTracks().forEach((t) => t.stop());
-              } catch {
-                toast.error("Permiso de micrófono denegado. Habilítalo en los ajustes del navegador.");
-                return;
-              }
-              setVoiceOpen(true);
-            }}
-            className="tap btn-glass p-2 rounded-xl"
-            title="Modo voz"
-            aria-label="Modo voz"
-          >
-            <Mic className="w-5 h-5" />
-          </button>
         </header>
+
 
         {/* Messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6">
@@ -309,13 +285,6 @@ export function ChatApp() {
       <DebugPanel open={debugOpen} onClose={() => setDebugOpen(false)} />
       <CodePanel open={codeOpen} onClose={() => setCodeOpen(false)} />
       <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
-      <VoiceMode
-        open={voiceOpen}
-        onClose={() => setVoiceOpen(false)}
-        convId={convId}
-        ensureConv={ensureConv}
-        onMessagesChanged={() => { if (convId) loadMessages(convId); }}
-      />
     </div>
     </SpeechCtx.Provider>
   );
