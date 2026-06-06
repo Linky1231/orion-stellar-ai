@@ -68,11 +68,14 @@ async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, ma
     const gateway = createOpenAICompatible({
       name: "lovable",
       baseURL: "https://ai.gateway.lovable.dev/v1",
-      headers: { "Lovable-API-Key": key },
+      headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
     });
+    const system = messages.find((m: any) => m?.role === "system")?.content;
+    const promptMessages = messages.filter((m: any) => m?.role !== "system");
     const result = await generateText({
       model: gateway(LOVABLE_TEXT_MODEL),
-      messages,
+      ...(system ? { system: String(system) } : {}),
+      messages: promptMessages,
       maxOutputTokens: Math.min(maxTokens, 250),
       temperature: 0.6,
     });
@@ -82,7 +85,7 @@ async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, ma
     const message = String(e);
     if (message.includes("Payment Required")) {
       console.error("lovable ai credits exhausted");
-      return textResponseAsAI("La IA estable no tiene créditos disponibles ahora. Recarga créditos o inténtalo más tarde.", stream, jsonMode);
+      return null;
     }
     console.error("lovable ai failed", message);
     return null;
