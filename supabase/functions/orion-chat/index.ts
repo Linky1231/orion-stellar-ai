@@ -47,6 +47,72 @@ function extractJsonObject(text: string) {
   try { return JSON.parse(text.slice(start, end + 1)); } catch { return {}; }
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit, ms: number) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try { return await fetch(url, { ...init, signal: controller.signal }); }
+  finally { clearTimeout(timer); }
+}
+
+function messagesToPrompt(messages: any[]) {
+  return (messages || []).map((m: any) => {
+    const role = m.role === "assistant" ? "assistant" : m.role === "system" ? "system" : "user";
+    const content = Array.isArray(m.content)
+      ? m.content.map((p: any) => p?.text || p?.image_url?.url || "").filter(Boolean).join("\n")
+      : String(m.content || "");
+    return `<|im_start|>${role}\n${content}\n<|im_end|>`;
+  }).join("\n") + "\n<|im_start|>assistant\n";
+}
+
+function textResponseAsAI(text: string, stream: boolean, _jsonMode = false) {
+  const clean = text.replace(/<\|im_end\|>/g, "").trim();
+  if (stream) {
+    const encoder = new TextEncoder();
+    return new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: clean } }] })}\n\n`));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    }), { headers: { ...corsHeaders, "content-type": "text/event-stream" } });
+  }
+  return new Response(JSON.stringify({ choices: [{ message: { content: clean } }] }), {
+    headers: { ...corsHeaders, "content-type": "application/json" },
+  });
+}
+
+async function stableHordeText(messages: any[]) {
+  const start = await fetchWithTimeout("https://stablehorde.net/api/v2/generate/text/async", {
+    method: "POST",
+    headers: { "content-type": "application/json", "apikey": HORDE_API_KEY, "Client-Agent": HORDE_CLIENT_AGENT },
+    body: JSON.stringify({
+      prompt: messagesToPrompt(messages),
+      params: { max_length: 900, max_context_length: 4096, temperature: 0.7, top_p: 0.9, repetition_penalty: 1.08 },
+      trusted_workers: false,
+      models: ["aphrodite/TheDrummer/Anubis-70B-v1.2"],
+    }),
+  }, 12000);
+  const startJson = await safeJson(start);
+  if (!start.ok || !startJson?.id) throw new Error(startJson?.message || startJson?.error || "Stable Horde no aceptó la petición.");
+  const id = String(startJson.id);
+  for (let i = 0; i < 16; i++) {
+    await new Promise((res) => setTimeout(res, i === 0 ? 1800 : 3000));
+    const status = await fetchWithTimeout(`https://stablehorde.net/api/v2/generate/text/status/${id}`, {
+      headers: { "Client-Agent": HORDE_CLIENT_AGENT },
+    }, 12000);
+    const statusJson = await safeJson(status);
+    const text = statusJson?.generations?.[0]?.text;
+    if (text) return String(text);
+    if (statusJson?.faulted) throw new Error("Stable Horde falló generando texto.");
+  }
+  throw new Error("Stable Horde tardó demasiado.");
+}
+
+async function stableHordeJSON(messages: any[]) {
+  const text = await stableHordeText(messages);
+  return extractJsonObject(text);
+}
+
 async function freeAI(messages: any[], stream = false, jsonMode = false): Promise<Response> {
   // Retry with backoff on 429 (Pollinations queue full), then try another free model.
   let lastFreeResponse: Response | null = null;
