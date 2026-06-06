@@ -123,7 +123,8 @@ async function freeAI(messages: any[], stream = false, jsonMode = false): Promis
   try {
     const text = jsonMode ? JSON.stringify(await stableHordeJSON(messages)) : await stableHordeText(messages);
     return textResponseAsAI(text, stream, jsonMode);
-  } catch (_e) {
+  } catch (e) {
+    console.error("stable horde text fallback failed", String(e));
     const r = await fetchWithTimeout(FREE_AI_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
