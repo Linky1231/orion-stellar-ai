@@ -9,7 +9,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const POLLINATIONS_API_KEY = Deno.env.get("POLLINATIONS_API_KEY");
 const FREE_AI_URL = "https://text.pollinations.ai/openai";
 const FREE_TEXT_MODEL = "openai-fast";
 const FREE_TEXT_FALLBACK_MODEL = "openai";
