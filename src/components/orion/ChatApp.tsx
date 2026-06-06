@@ -370,6 +370,11 @@ function GeneratedImage({ src }: { src: string }) {
       setFailed(true);
       return;
     }
+    if (src.includes("image.pollinations.ai")) {
+      window.setTimeout(() => setUrl(src), 7000);
+      setTries((n) => n + 1);
+      return;
+    }
     try {
       const next = new URL(src);
       next.searchParams.set("seed", String(Date.now()));
@@ -381,7 +386,7 @@ function GeneratedImage({ src }: { src: string }) {
   }
 
   if (failed) {
-    return <div className="liquid-glass rounded-2xl border border-border px-4 py-3 text-sm text-muted-foreground">No se pudo cargar la imagen generada. Intenta de nuevo.</div>;
+    return <div className="liquid-glass rounded-2xl border border-border px-4 py-3 text-sm text-muted-foreground">Pollinations está saturado ahora mismo. Espera unos segundos y vuelve a generar la imagen.</div>;
   }
 
   return <img src={url} alt="Imagen generada" onError={retry} className="rounded-2xl max-h-80 border border-border shadow-soft" />;
