@@ -311,8 +311,8 @@ async function generatePublicImage(prompt: string) {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "apikey": "0000000000",
-      "Client-Agent": "OrionEstellar:1.0:Linky",
+      "apikey": HORDE_API_KEY,
+      "Client-Agent": HORDE_CLIENT_AGENT,
     },
     body: JSON.stringify({
       prompt,
