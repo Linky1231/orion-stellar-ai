@@ -68,11 +68,14 @@ async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, ma
     const gateway = createOpenAICompatible({
       name: "lovable",
       baseURL: "https://ai.gateway.lovable.dev/v1",
-      headers: { "Lovable-API-Key": key },
+      headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
     });
+    const system = messages.find((m: any) => m?.role === "system")?.content;
+    const promptMessages = messages.filter((m: any) => m?.role !== "system");
     const result = await generateText({
       model: gateway(LOVABLE_TEXT_MODEL),
-      messages,
+      ...(system ? { system: String(system) } : {}),
+      messages: promptMessages,
       maxOutputTokens: Math.min(maxTokens, 250),
       temperature: 0.6,
     });
@@ -82,7 +85,7 @@ async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, ma
     const message = String(e);
     if (message.includes("Payment Required")) {
       console.error("lovable ai credits exhausted");
-      return textResponseAsAI("La IA estable no tiene créditos disponibles ahora. Recarga créditos o inténtalo más tarde.", stream, jsonMode);
+      return null;
     }
     console.error("lovable ai failed", message);
     return null;
@@ -108,9 +111,12 @@ function messagesToPrompt(messages: any[]) {
 
 function textResponseAsAI(text: string, stream: boolean, _jsonMode = false) {
   const clean = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<think>[\s\S]*/gi, "")
     .split(/<\|im_start\|>|<\|im_end\|>|\n\s*(system|user|assistant)\s*\n/i)[0]
     .replace(/<\|[^>]+\|>/g, "")
-    .trim() || "Estoy lista. ¿En qué te ayudo?";
+    .trim()
+    .slice(0, 600) || "Estoy lista. ¿En qué te ayudo?";
   if (stream) {
     const encoder = new TextEncoder();
     return new Response(new ReadableStream({
@@ -137,16 +143,15 @@ async function stableHordeText(messages: any[]) {
     headers: { "content-type": "application/json", "apikey": HORDE_API_KEY, "Client-Agent": HORDE_CLIENT_AGENT },
     body: JSON.stringify({
       prompt: messagesToPrompt(messages),
-      params: { max_length: 220, max_context_length: 512, temperature: 0.7, top_p: 0.9, repetition_penalty: 1.08 },
+        params: { max_length: 150, max_context_length: 512, temperature: 0.7, top_p: 0.9, repetition_penalty: 1.08 },
       trusted_workers: false,
-      models: ["aphrodite/TheDrummer/Anubis-70B-v1.2"],
     }),
   }, 12000);
   const startJson = await readJsonSafe(start);
   if (!start.ok || !startJson?.id) throw new Error(startJson?.message || startJson?.error || "Stable Horde no aceptó la petición.");
   const id = String(startJson.id);
-  for (let i = 0; i < 16; i++) {
-    await new Promise((res) => setTimeout(res, i === 0 ? 1800 : 3000));
+  for (let i = 0; i < 5; i++) {
+    await new Promise((res) => setTimeout(res, i === 0 ? 1500 : 2500));
     const status = await fetchWithTimeout(`https://stablehorde.net/api/v2/generate/text/status/${id}`, {
       headers: { "Client-Agent": HORDE_CLIENT_AGENT },
     }, 12000);
@@ -167,15 +172,30 @@ async function freeAI(messages: any[], stream = false, jsonMode = false, maxToke
   const lovable = await lovableAI(messages, stream, jsonMode, maxTokens);
   if (lovable) return lovable;
 
+  try {
+    const hordeText = await stableHordeText([
+      { role: "system", content: "Responde en español, máximo 600 caracteres. No muestres razonamiento interno ni etiquetas <think>." },
+      ...messages,
+    ]);
+    return textResponseAsAI(hordeText, stream, jsonMode);
+  } catch (e) {
+    console.error("stable horde text fallback failed", String(e));
+  }
+
   // Public fallback: keep timeouts short so the UI never waits forever.
   for (const model of [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL]) {
-    const r = await fetchWithTimeout(FREE_AI_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
-      body: JSON.stringify({ model, messages, stream, max_tokens: Math.min(maxTokens, 250), ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
-    }, stream ? 12000 : 10000).catch(() => null);
-    if (r?.ok) return r;
-    if (r) { try { await r.body?.cancel(); } catch { /* ignore */ } }
+    for (let attempt = 0; attempt < 1; attempt++) {
+      const r = await fetchWithTimeout(FREE_AI_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
+        body: JSON.stringify({ model, messages, stream, max_tokens: Math.min(maxTokens, 250), ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
+      }, stream ? 5000 : 5000).catch(() => null);
+      if (r?.ok) return r;
+      const retryable = !r || r.status === 429 || r.status >= 500;
+      if (r) { try { await r.body?.cancel(); } catch { /* ignore */ } }
+      if (!retryable) break;
+      await new Promise((res) => setTimeout(res, 1200 * (attempt + 1)));
+    }
   }
   return quickFallback(stream);
 }
