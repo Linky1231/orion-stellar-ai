@@ -235,6 +235,8 @@ function base64ToBytes(b64: string) {
 function findImageBase64(value: any): string | null {
   if (!value || typeof value !== "object") return null;
   if (typeof value.b64_json === "string" && value.b64_json.length > 100) return value.b64_json;
+  if (typeof value.image?.data === "string" && value.image.data.length > 100) return value.image.data;
+  if (typeof value.data === "string" && value.data.length > 100 && value.extra_content?.google?.mime_type?.startsWith("image/")) return value.data;
   if (typeof value.image_url?.url === "string" && value.image_url.url.startsWith("data:image/")) return value.image_url.url;
   if (typeof value.url === "string" && value.url.startsWith("data:image/")) return value.url;
   for (const child of Object.values(value)) {
@@ -283,19 +285,21 @@ Deno.serve(async (req) => {
       const lovableKey = Deno.env.get("LOVABLE_API_KEY");
       const finalPrompt = enrichedPrompt.slice(0, 1800);
 
-      // Primary: Lovable AI Gateway. Fast model first (evita timeouts en Safari/iOS),
-      // luego modelos de mayor calidad como fallback.
-      const attempts: Array<{ model: string; body: any }> = lovableKey ? [
+      // Primary: Lovable AI Gateway. Gemini image models return images through
+      // chat completions; image-only models use the images endpoint.
+      const attempts: Array<{ model: string; endpoint: "chat" | "images"; body: any }> = lovableKey ? [
         {
-          model: "google/gemini-3.1-flash-image-preview",
+          model: "google/gemini-3-pro-image-preview",
+          endpoint: "chat",
           body: {
-            model: "google/gemini-3.1-flash-image-preview",
+            model: "google/gemini-3-pro-image-preview",
             messages: [{ role: "user", content: finalPrompt }],
             modalities: ["image", "text"],
           },
         },
         {
           model: "google/gemini-2.5-flash-image",
+          endpoint: "chat",
           body: {
             model: "google/gemini-2.5-flash-image",
             messages: [{ role: "user", content: finalPrompt }],
@@ -304,19 +308,32 @@ Deno.serve(async (req) => {
         },
         {
           model: "openai/gpt-image-2",
+          endpoint: "images",
           body: {
             model: "openai/gpt-image-2",
             prompt: finalPrompt,
             quality: "medium",
             size: "1024x1024",
             n: 1,
+            response_format: "b64_json",
+          },
+        },
+        {
+          model: "google/imagen-4.0-generate-001",
+          endpoint: "images",
+          body: {
+            model: "google/imagen-4.0-generate-001",
+            prompt: finalPrompt,
+            aspect_ratio: "1:1",
+            n: 1,
+            response_format: "b64_json",
           },
         },
       ] : [];
 
       for (const att of attempts) {
         try {
-          const gw = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+          const gw = await fetch(`https://ai.gateway.lovable.dev/v1/${att.endpoint === "chat" ? "chat/completions" : "images/generations"}`, {
             method: "POST",
             headers: { "content-type": "application/json", "Lovable-API-Key": lovableKey! },
             body: JSON.stringify(att.body),
