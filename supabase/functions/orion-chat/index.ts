@@ -289,10 +289,19 @@ Deno.serve(async (req) => {
       // chat completions; image-only models use the images endpoint.
       const attempts: Array<{ model: string; endpoint: "chat" | "images"; body: any }> = lovableKey ? [
         {
-          model: "google/gemini-3-pro-image-preview",
+          model: "google/gemini-3.1-flash-image-preview",
           endpoint: "chat",
           body: {
-            model: "google/gemini-3-pro-image-preview",
+            model: "google/gemini-3.1-flash-image-preview",
+            messages: [{ role: "user", content: finalPrompt }],
+            modalities: ["image", "text"],
+          },
+        },
+        {
+          model: "google/gemini-3-pro-image",
+          endpoint: "chat",
+          body: {
+            model: "google/gemini-3-pro-image",
             messages: [{ role: "user", content: finalPrompt }],
             modalities: ["image", "text"],
           },
@@ -304,6 +313,16 @@ Deno.serve(async (req) => {
             model: "google/gemini-2.5-flash-image",
             messages: [{ role: "user", content: finalPrompt }],
             modalities: ["image", "text"],
+          },
+        },
+        {
+          model: "google/gemini-2.5-flash-image",
+          endpoint: "images",
+          body: {
+            model: "google/gemini-2.5-flash-image",
+            prompt: finalPrompt,
+            n: 1,
+            response_format: "b64_json",
           },
         },
         {
@@ -370,6 +389,7 @@ Deno.serve(async (req) => {
       }
 
       if (!imgBytes) {
+        console.warn("image generation failed", lastErr);
         return new Response(JSON.stringify({
           error: "IMAGE_GENERATION_UNAVAILABLE",
           message: lastErr.includes("402")
