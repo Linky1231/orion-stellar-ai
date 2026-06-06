@@ -75,9 +75,9 @@
   --gradient-orion: linear-gradient(135deg, oklch(0.62 0.22 260), oklch(0.65 0.24 300));
   --gradient-bg:
     radial-gradient(ellipse 80% 60% at 20% 0%, oklch(0.78 0.18 290 / 0.35), transparent 60%),
-    radial-gradient(ellipse 70% 50% at 100% 30%, oklch(0.75 0.18 220 / 0.30), transparent 65%),
-    radial-gradient(ellipse 60% 60% at 50% 100%, oklch(0.78 0.16 330 / 0.28), transparent 60%),
-    linear-gradient(180deg, oklch(0.98 0.01 280), oklch(0.96 0.02 270));
+    radial-gradient(ellipse 70% 50% at 100% 30%, oklch(0.72 0.20 265 / 0.32), transparent 65%),
+    radial-gradient(ellipse 60% 60% at 50% 100%, oklch(0.74 0.18 270 / 0.30), transparent 60%),
+    linear-gradient(180deg, oklch(0.98 0.01 280), oklch(0.96 0.03 275));
   --shadow-soft: 0 1px 2px oklch(0.2 0.02 270 / 0.05), 0 10px 30px oklch(0.2 0.02 270 / 0.08);
   --shadow-glow: 0 12px 40px -10px oklch(0.58 0.22 280 / 0.45);
   --shadow-glass: 0 1px 0 oklch(1 0 0 / 0.6) inset, 0 -1px 0 oklch(1 0 0 / 0.15) inset, 0 8px 32px oklch(0.2 0.05 280 / 0.12);
@@ -111,8 +111,8 @@
 
   --gradient-bg:
     radial-gradient(ellipse 80% 60% at 20% 0%, oklch(0.45 0.22 290 / 0.40), transparent 60%),
-    radial-gradient(ellipse 70% 50% at 100% 30%, oklch(0.40 0.22 220 / 0.35), transparent 65%),
-    radial-gradient(ellipse 60% 60% at 50% 100%, oklch(0.45 0.20 330 / 0.30), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 100% 30%, oklch(0.42 0.22 265 / 0.36), transparent 65%),
+    radial-gradient(ellipse 60% 60% at 50% 100%, oklch(0.45 0.20 275 / 0.32), transparent 60%),
     linear-gradient(180deg, oklch(0.10 0.02 275), oklch(0.08 0.02 275));
   --shadow-glass: 0 1px 0 oklch(1 0 0 / 0.08) inset, 0 -1px 0 oklch(0 0 0 / 0.2) inset, 0 10px 40px oklch(0 0 0 / 0.45);
 }
@@ -136,7 +136,7 @@
     inset: -20%;
     background:
       radial-gradient(circle at 30% 20%, oklch(0.7 0.22 290 / 0.18), transparent 40%),
-      radial-gradient(circle at 70% 80%, oklch(0.7 0.22 220 / 0.18), transparent 40%);
+      radial-gradient(circle at 70% 80%, oklch(0.7 0.20 265 / 0.18), transparent 40%);
     filter: blur(60px);
     z-index: -1;
     pointer-events: none;
