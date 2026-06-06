@@ -285,13 +285,6 @@ export function ChatApp() {
       <DebugPanel open={debugOpen} onClose={() => setDebugOpen(false)} />
       <CodePanel open={codeOpen} onClose={() => setCodeOpen(false)} />
       <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
-      <VoiceMode
-        open={voiceOpen}
-        onClose={() => setVoiceOpen(false)}
-        convId={convId}
-        ensureConv={ensureConv}
-        onMessagesChanged={() => { if (convId) loadMessages(convId); }}
-      />
     </div>
     </SpeechCtx.Provider>
   );
