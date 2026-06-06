@@ -283,13 +283,21 @@ Deno.serve(async (req) => {
       const lovableKey = Deno.env.get("LOVABLE_API_KEY");
       const finalPrompt = enrichedPrompt.slice(0, 1800);
 
-      // Primary: Lovable AI Gateway with high-quality models.
-      // Try in order: Gemini 3 Pro Image, GPT-Image-2 (high), Gemini 2.5 Flash Image.
+      // Primary: Lovable AI Gateway. Fast model first (evita timeouts en Safari/iOS),
+      // luego modelos de mayor calidad como fallback.
       const attempts: Array<{ model: string; body: any }> = lovableKey ? [
         {
-          model: "google/gemini-3-pro-image-preview",
+          model: "google/gemini-3.1-flash-image-preview",
           body: {
-            model: "google/gemini-3-pro-image-preview",
+            model: "google/gemini-3.1-flash-image-preview",
+            messages: [{ role: "user", content: finalPrompt }],
+            modalities: ["image", "text"],
+          },
+        },
+        {
+          model: "google/gemini-2.5-flash-image",
+          body: {
+            model: "google/gemini-2.5-flash-image",
             messages: [{ role: "user", content: finalPrompt }],
             modalities: ["image", "text"],
           },
@@ -299,17 +307,9 @@ Deno.serve(async (req) => {
           body: {
             model: "openai/gpt-image-2",
             prompt: finalPrompt,
-            quality: "high",
+            quality: "medium",
             size: "1024x1024",
             n: 1,
-          },
-        },
-        {
-          model: "google/gemini-2.5-flash-image",
-          body: {
-            model: "google/gemini-2.5-flash-image",
-            messages: [{ role: "user", content: finalPrompt }],
-            modalities: ["image", "text"],
           },
         },
       ] : [];
