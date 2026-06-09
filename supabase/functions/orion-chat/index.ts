@@ -11,10 +11,8 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const FREE_AI_URL = "https://text.pollinations.ai/openai";
-const FREE_TEXT_MODEL = "openai-large";
-const FREE_TEXT_FALLBACK_MODEL = "openai";
-const LOVABLE_TEXT_MODEL = "google/gemini-3-flash-preview";
+const LOVABLE_TEXT_MODEL = "google/gemini-2.5-flash-lite";
+const CHAT_TIMEOUT_MS = 2000;
 const HORDE_API_KEY = "0000000000";
 const HORDE_CLIENT_AGENT = "OrionEstellar:1.0:Linky";
 
@@ -64,6 +62,8 @@ function quickFallback(stream: boolean) {
 async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, maxTokens: number) {
   const key = Deno.env.get("LOVABLE_API_KEY");
   if (!key) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
   try {
     const gateway = createOpenAICompatible({
       name: "lovable",
@@ -76,8 +76,9 @@ async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, ma
       model: gateway(LOVABLE_TEXT_MODEL),
       ...(system ? { system: String(system) } : {}),
       messages: promptMessages,
-      maxOutputTokens: Math.min(maxTokens, 250),
+      maxOutputTokens: Math.min(maxTokens, 600),
       temperature: 0.6,
+      abortSignal: controller.signal,
     });
     const text = jsonMode ? result.text : result.text.slice(0, 600);
     return textResponseAsAI(text, stream, jsonMode);
@@ -89,6 +90,8 @@ async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, ma
     }
     console.error("lovable ai failed", message);
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -169,14 +172,8 @@ async function stableHordeJSON(messages: any[]) {
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
-  // Public GPT-5 via Pollinations - hard 2s budget, single attempt
-  const r = await fetchWithTimeout(FREE_AI_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
-    body: JSON.stringify({ model: FREE_TEXT_MODEL, messages, stream, max_tokens: Math.min(maxTokens, 600), ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
-  }, 2000).catch(() => null);
+  const r = await lovableAI(messages, stream, jsonMode, maxTokens);
   if (r?.ok) return r;
-  if (r) { try { await r.body?.cancel(); } catch { /* ignore */ } }
   return quickFallback(stream);
 }
 
