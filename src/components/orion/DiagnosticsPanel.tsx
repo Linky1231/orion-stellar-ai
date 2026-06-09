@@ -4,11 +4,13 @@ import { runDiagnostics, type DiagnosticsResult } from "@/lib/orion-api";
 import { sfx } from "@/lib/sounds";
 
 const LABELS: Record<string, string> = {
-  lovable: "Lovable AI Gateway (principal)",
+  openai: "OpenAI API (principal · gpt-4o-mini)",
+  lovable: "Lovable AI Gateway (fallback)",
   database: "Base de datos",
 };
 
 const ENV_LABELS: Record<string, string> = {
+  OPENAI_API_KEY: "Clave OpenAI",
   LOVABLE_API_KEY: "Clave Lovable AI",
   SUPABASE_URL: "URL del backend",
   SUPABASE_SERVICE_ROLE_KEY: "Clave de servicio",

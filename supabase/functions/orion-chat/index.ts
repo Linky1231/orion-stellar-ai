@@ -443,6 +443,18 @@ Deno.serve(async (req) => {
       };
 
       const results: Record<string, any> = {};
+      results.openai = await time(async () => {
+        const key = Deno.env.get("OPENAI_API_KEY");
+        if (!key) return { ok: false, error: "OPENAI_API_KEY no configurada" };
+        const r = await fetchWithTimeout(OPENAI_URL, {
+          method: "POST",
+          headers: { "content-type": "application/json", "authorization": `Bearer ${key}` },
+          body: JSON.stringify({ model: OPENAI_MODEL, messages: probe, max_tokens: 20 }),
+        }, CHAT_TIMEOUT_MS);
+        if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
+        const d = await safeJson(r);
+        return { ok: true, sample: d?.choices?.[0]?.message?.content || "" };
+      });
       results.lovable = await time(async () => {
         const key = Deno.env.get("LOVABLE_API_KEY");
         if (!key) return { ok: false, error: "LOVABLE_API_KEY no configurada" };
@@ -460,6 +472,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({
         timestamp: new Date().toISOString(),
         env: {
+          OPENAI_API_KEY: !!Deno.env.get("OPENAI_API_KEY"),
           LOVABLE_API_KEY: !!Deno.env.get("LOVABLE_API_KEY"),
           SUPABASE_URL: !!SUPABASE_URL,
           SUPABASE_SERVICE_ROLE_KEY: !!SUPABASE_SERVICE_ROLE_KEY,
