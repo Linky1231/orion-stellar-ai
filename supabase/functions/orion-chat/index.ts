@@ -169,6 +169,23 @@ async function stableHordeJSON(messages: any[]) {
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
+  // Public GPT-5 via Pollinations (no API key required)
+  for (const model of [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL]) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const r = await fetchWithTimeout(FREE_AI_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
+        body: JSON.stringify({ model, messages, stream, max_tokens: Math.min(maxTokens, 600), ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
+      }, stream ? 15000 : 12000).catch(() => null);
+      if (r?.ok) return r;
+      const retryable = !r || r.status === 429 || r.status >= 500;
+      if (r) { try { await r.body?.cancel(); } catch { /* ignore */ } }
+      if (!retryable) break;
+      await new Promise((res) => setTimeout(res, 1000 * (attempt + 1)));
+    }
+  }
+
+  // Last resort: Lovable AI gateway (uses credits) then Stable Horde
   const lovable = await lovableAI(messages, stream, jsonMode, maxTokens);
   if (lovable) return lovable;
 
@@ -182,21 +199,6 @@ async function freeAI(messages: any[], stream = false, jsonMode = false, maxToke
     console.error("stable horde text fallback failed", String(e));
   }
 
-  // Public fallback: keep timeouts short so the UI never waits forever.
-  for (const model of [FREE_TEXT_MODEL, FREE_TEXT_FALLBACK_MODEL]) {
-    for (let attempt = 0; attempt < 1; attempt++) {
-      const r = await fetchWithTimeout(FREE_AI_URL, {
-        method: "POST",
-        headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
-        body: JSON.stringify({ model, messages, stream, max_tokens: Math.min(maxTokens, 250), ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
-      }, stream ? 5000 : 5000).catch(() => null);
-      if (r?.ok) return r;
-      const retryable = !r || r.status === 429 || r.status >= 500;
-      if (r) { try { await r.body?.cancel(); } catch { /* ignore */ } }
-      if (!retryable) break;
-      await new Promise((res) => setTimeout(res, 1200 * (attempt + 1)));
-    }
-  }
   return quickFallback(stream);
 }
 
