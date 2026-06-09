@@ -4,9 +4,7 @@ import { runDiagnostics, type DiagnosticsResult } from "@/lib/orion-api";
 import { sfx } from "@/lib/sounds";
 
 const LABELS: Record<string, string> = {
-  lovable: "Lovable AI (principal)",
-  pollinations: "Pollinations (fallback público)",
-  stableHorde: "Stable Horde (fallback comunitario)",
+  lovable: "Lovable AI Gateway (principal)",
   database: "Base de datos",
 };
 
@@ -124,7 +122,7 @@ export function DiagnosticsPanel({ open, onClose }: { open: boolean; onClose: ()
 
           {/* Hint */}
           <div className="text-[11px] text-muted-foreground px-1 leading-relaxed">
-            Si Lovable AI falla por créditos agotados, el chat usa automáticamente Stable Horde o Pollinations. Si todos fallan, verás un mensaje de servicio lento en el chat.
+            El chat usa una API real con límite duro de 2 segundos. Si no responde a tiempo, verás un aviso de servicio lento.
           </div>
         </div>
       </main>
