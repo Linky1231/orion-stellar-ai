@@ -178,19 +178,7 @@ async function freeAI(messages: any[], stream = false, jsonMode = false, maxToke
 }
 
 async function freeVisionAI(messages: any[], stream = false): Promise<Response> {
-  let lastFreeResponse: Response | null = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const r = await fetch(FREE_AI_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: "openai", messages, stream }),
-    });
-    if (r.status !== 429) return r;
-    lastFreeResponse = r.clone();
-    try { await r.body?.cancel(); } catch { /* ignore */ }
-    await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
-  }
-  return lastFreeResponse || freeAI(messages, stream);
+  return freeAI(messages, stream);
 }
 
 async function externalAI(messages: any[], stream = false) {
@@ -393,7 +381,7 @@ async function generatePublicImage(prompt: string) {
   throw new Error("El proveedor público tardó demasiado. Intenta de nuevo.");
 }
 
-async function aiJSON(messages: any[], schema: any, name: string, _model = FREE_TEXT_MODEL) {
+async function aiJSON(messages: any[], schema: any, name: string, _model = LOVABLE_TEXT_MODEL) {
   const r = await freeAI([
     { role: "system", content: `Devuelve únicamente JSON válido para la función ${name}, sin markdown ni explicación. Esquema esperado: ${JSON.stringify(schema)}` },
     ...messages,
@@ -434,20 +422,6 @@ Deno.serve(async (req) => {
         if (!r) return { ok: false, error: "sin respuesta (créditos agotados o error)" };
         const d = await safeJson(r);
         return { ok: true, sample: d?.choices?.[0]?.message?.content || "" };
-      });
-      results.pollinations = await time(async () => {
-        const r = await fetchWithTimeout(FREE_AI_URL, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ model: FREE_TEXT_MODEL, messages: probe, max_tokens: 20 }),
-        }, 6000);
-        if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
-        const d = await safeJson(r);
-        return { ok: true, sample: d?.choices?.[0]?.message?.content || "" };
-      });
-      results.stableHorde = await time(async () => {
-        const t = await stableHordeText(probe);
-        return { ok: true, sample: t };
       });
       results.database = await time(async () => {
         const r = await sb("orion_config?select=id&limit=1");
@@ -633,7 +607,7 @@ Reglas: directo, sin paja. Si la petición es ambigua, asume valores sensatos y 
           required: ["facts"],
         },
         "save_facts",
-        FREE_TEXT_FALLBACK_MODEL,
+        LOVABLE_TEXT_MODEL,
       );
       return new Response(JSON.stringify(out), { headers: { ...corsHeaders, "content-type": "application/json" } });
     }
