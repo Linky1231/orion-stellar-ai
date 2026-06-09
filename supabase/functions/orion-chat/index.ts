@@ -176,7 +176,7 @@ async function freeAI(messages: any[], stream = false, jsonMode = false, maxToke
         method: "POST",
         headers: { "content-type": "application/json", "accept": stream ? "text/event-stream" : "application/json" },
         body: JSON.stringify({ model, messages, stream, max_tokens: Math.min(maxTokens, 600), ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }),
-      }, stream ? 15000 : 12000).catch(() => null);
+      }, 2000).catch(() => null);
       if (r?.ok) return r;
       const retryable = !r || r.status === 429 || r.status >= 500;
       if (r) { try { await r.body?.cancel(); } catch { /* ignore */ } }
