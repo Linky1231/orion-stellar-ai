@@ -13,6 +13,8 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const LOVABLE_TEXT_MODEL = "google/gemini-2.5-flash-lite";
 const CHAT_TIMEOUT_MS = 2000;
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+const OPENAI_MODEL = "gpt-4o-mini";
 const HORDE_API_KEY = "0000000000";
 const HORDE_CLIENT_AGENT = "OrionEstellar:1.0:Linky";
 
@@ -172,8 +174,34 @@ async function stableHordeJSON(messages: any[]) {
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
-  const r = await lovableAI(messages, stream, jsonMode, maxTokens);
-  if (r?.ok) return r;
+  // 1) Real OpenAI API (hard 2s budget)
+  const key = Deno.env.get("OPENAI_API_KEY");
+  if (key) {
+    const r = await fetchWithTimeout(OPENAI_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "accept": stream ? "text/event-stream" : "application/json",
+        "authorization": `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        messages,
+        stream,
+        max_tokens: Math.min(maxTokens, 600),
+        temperature: 0.6,
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      }),
+    }, CHAT_TIMEOUT_MS).catch(() => null);
+    if (r?.ok) return r;
+    if (r) {
+      const errTxt = await r.text().catch(() => "");
+      console.error("openai api failed", r.status, errTxt.slice(0, 200));
+    }
+  }
+  // 2) Lovable AI Gateway (fallback)
+  const lr = await lovableAI(messages, stream, jsonMode, maxTokens);
+  if (lr?.ok) return lr;
   return quickFallback(stream);
 }
 
