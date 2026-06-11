@@ -64,8 +64,6 @@ function quickFallback(stream: boolean) {
 async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, maxTokens: number) {
   const key = Deno.env.get("LOVABLE_API_KEY");
   if (!key) return null;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
   try {
     const gateway = createOpenAICompatible({
       name: "lovable",
@@ -78,22 +76,13 @@ async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, ma
       model: gateway(LOVABLE_TEXT_MODEL),
       ...(system ? { system: String(system) } : {}),
       messages: promptMessages,
-      maxOutputTokens: Math.min(maxTokens, 600),
+      maxOutputTokens: maxTokens,
       temperature: 0.6,
-      abortSignal: controller.signal,
     });
-    const text = jsonMode ? result.text : result.text.slice(0, 600);
-    return textResponseAsAI(text, stream, jsonMode);
+    return textResponseAsAI(result.text, stream, jsonMode);
   } catch (e) {
-    const message = String(e);
-    if (message.includes("Payment Required")) {
-      console.error("lovable ai credits exhausted");
-      return null;
-    }
-    console.error("lovable ai failed", message);
+    console.error("lovable ai failed", String(e));
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
