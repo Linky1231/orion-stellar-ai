@@ -163,38 +163,55 @@ async function stableHordeJSON(messages: any[]) {
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
-  // 1) Real OpenAI API — wait as long as needed
   const key = Deno.env.get("OPENAI_API_KEY");
-  if (key) {
-    const r = await fetch(OPENAI_URL, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "accept": stream ? "text/event-stream" : "application/json",
-        "authorization": `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        messages,
-        stream,
-        max_tokens: maxTokens,
-        temperature: 0.6,
-        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-      }),
-    }).catch((e) => { console.error("openai fetch failed", String(e)); return null; });
-    if (r?.ok) return r;
-    if (r) {
-      const errTxt = await r.text().catch(() => "");
-      console.error("openai api failed", r.status, errTxt.slice(0, 200));
+  let lastErr = "sin clave";
+  let attempt = 0;
+  // Espera infinita: reintenta mientras la API esté caída/saturada (429/5xx)
+  while (true) {
+    attempt++;
+    // 1) OpenAI
+    if (key) {
+      const r = await fetch(OPENAI_URL, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "accept": stream ? "text/event-stream" : "application/json",
+          "authorization": `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          model: OPENAI_MODEL,
+          messages,
+          stream,
+          max_tokens: maxTokens,
+          temperature: 0.6,
+          ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+        }),
+      }).catch((e) => { console.error("openai fetch failed", String(e)); return null as Response | null; });
+      if (r?.ok) return r;
+      if (r) {
+        const errTxt = await r.text().catch(() => "");
+        lastErr = `openai ${r.status}`;
+        console.error("openai api failed", r.status, errTxt.slice(0, 200), "attempt", attempt);
+        // Errores no recuperables: clave inválida / petición mal formada → no reintentar OpenAI
+        if (r.status === 400 || r.status === 401 || r.status === 403 || r.status === 404) {
+          // pasar a fallback
+        } else {
+          // 429 / 5xx → backoff y reintenta OpenAI
+          const wait = Math.min(30000, 1000 * Math.pow(2, Math.min(attempt, 5)));
+          await new Promise((res) => setTimeout(res, wait));
+          continue;
+        }
+      }
     }
+    // 2) Lovable AI Gateway (fallback)
+    const lr = await lovableAI(messages, stream, jsonMode, maxTokens);
+    if (lr?.ok) return lr;
+    lastErr = `${lastErr}; lovable sin respuesta`;
+    // Si ambos fallan, espera antes de volver a intentar
+    const wait = Math.min(30000, 1000 * Math.pow(2, Math.min(attempt, 5)));
+    console.error("ambos proveedores fallaron, reintentando en", wait, "ms —", lastErr);
+    await new Promise((res) => setTimeout(res, wait));
   }
-  // 2) Lovable AI Gateway (fallback) — also waits as long as needed
-  const lr = await lovableAI(messages, stream, jsonMode, maxTokens);
-  if (lr?.ok) return lr;
-  return new Response(JSON.stringify({ error: "No se pudo obtener respuesta de la IA." }), {
-    status: 502,
-    headers: { ...corsHeaders, "content-type": "application/json" },
-  });
 }
 
 async function freeVisionAI(messages: any[], stream = false): Promise<Response> {
