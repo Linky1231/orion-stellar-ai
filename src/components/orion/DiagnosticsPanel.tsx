@@ -124,7 +124,7 @@ export function DiagnosticsPanel({ open, onClose }: { open: boolean; onClose: ()
 
           {/* Hint */}
           <div className="text-[11px] text-muted-foreground px-1 leading-relaxed">
-            El chat usa una API real con límite duro de 2 segundos. Si no responde a tiempo, verás un aviso de servicio lento.
+            El chat espera la respuesta de la API el tiempo que haga falta, sin cortes ni tiempos límite.
           </div>
         </div>
       </main>
