@@ -64,8 +64,6 @@ function quickFallback(stream: boolean) {
 async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, maxTokens: number) {
   const key = Deno.env.get("LOVABLE_API_KEY");
   if (!key) return null;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
   try {
     const gateway = createOpenAICompatible({
       name: "lovable",
@@ -78,22 +76,13 @@ async function lovableAI(messages: any[], stream: boolean, jsonMode: boolean, ma
       model: gateway(LOVABLE_TEXT_MODEL),
       ...(system ? { system: String(system) } : {}),
       messages: promptMessages,
-      maxOutputTokens: Math.min(maxTokens, 600),
+      maxOutputTokens: maxTokens,
       temperature: 0.6,
-      abortSignal: controller.signal,
     });
-    const text = jsonMode ? result.text : result.text.slice(0, 600);
-    return textResponseAsAI(text, stream, jsonMode);
+    return textResponseAsAI(result.text, stream, jsonMode);
   } catch (e) {
-    const message = String(e);
-    if (message.includes("Payment Required")) {
-      console.error("lovable ai credits exhausted");
-      return null;
-    }
-    console.error("lovable ai failed", message);
+    console.error("lovable ai failed", String(e));
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -174,10 +163,10 @@ async function stableHordeJSON(messages: any[]) {
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
-  // 1) Real OpenAI API (hard 2s budget)
+  // 1) Real OpenAI API — wait as long as needed
   const key = Deno.env.get("OPENAI_API_KEY");
   if (key) {
-    const r = await fetchWithTimeout(OPENAI_URL, {
+    const r = await fetch(OPENAI_URL, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -188,21 +177,24 @@ async function freeAI(messages: any[], stream = false, jsonMode = false, maxToke
         model: OPENAI_MODEL,
         messages,
         stream,
-        max_tokens: Math.min(maxTokens, 600),
+        max_tokens: maxTokens,
         temperature: 0.6,
         ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
-    }, CHAT_TIMEOUT_MS).catch(() => null);
+    }).catch((e) => { console.error("openai fetch failed", String(e)); return null; });
     if (r?.ok) return r;
     if (r) {
       const errTxt = await r.text().catch(() => "");
       console.error("openai api failed", r.status, errTxt.slice(0, 200));
     }
   }
-  // 2) Lovable AI Gateway (fallback)
+  // 2) Lovable AI Gateway (fallback) — also waits as long as needed
   const lr = await lovableAI(messages, stream, jsonMode, maxTokens);
   if (lr?.ok) return lr;
-  return quickFallback(stream);
+  return new Response(JSON.stringify({ error: "No se pudo obtener respuesta de la IA." }), {
+    status: 502,
+    headers: { ...corsHeaders, "content-type": "application/json" },
+  });
 }
 
 async function freeVisionAI(messages: any[], stream = false): Promise<Response> {
@@ -450,7 +442,7 @@ Deno.serve(async (req) => {
           method: "POST",
           headers: { "content-type": "application/json", "authorization": `Bearer ${key}` },
           body: JSON.stringify({ model: OPENAI_MODEL, messages: probe, max_tokens: 20 }),
-        }, CHAT_TIMEOUT_MS);
+        }, 20000);
         if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
         const d = await safeJson(r);
         return { ok: true, sample: d?.choices?.[0]?.message?.content || "" };
