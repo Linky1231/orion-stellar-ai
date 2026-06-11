@@ -442,7 +442,7 @@ Deno.serve(async (req) => {
           method: "POST",
           headers: { "content-type": "application/json", "authorization": `Bearer ${key}` },
           body: JSON.stringify({ model: OPENAI_MODEL, messages: probe, max_tokens: 20 }),
-        }, CHAT_TIMEOUT_MS);
+        }, 20000);
         if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
         const d = await safeJson(r);
         return { ok: true, sample: d?.choices?.[0]?.message?.content || "" };
