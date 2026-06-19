@@ -408,28 +408,15 @@ function SpeakBtn({ id, text }: { id: string; text: string }) {
 }
 
 function ThinkingIndicator() {
-  const phrases = ["Pensando", "Procesando", "Conectando ideas", "Casi listo"];
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setI((n) => (n + 1) % phrases.length), 2200);
-    return () => clearInterval(t);
-  }, []);
   return (
-    <div className="flex items-center gap-3 animate-fade-in">
-      <div className="relative">
-        <OrionLogo size={28} glow />
-        <span className="absolute inset-0 rounded-full animate-ping bg-primary/20" />
-      </div>
-      <div className="liquid-glass rounded-2xl px-4 py-2.5 flex items-center gap-2">
-        <span className="text-sm bg-gradient-to-r from-primary via-foreground to-primary bg-[length:200%_100%] bg-clip-text text-transparent animate-[shimmer_2.2s_linear_infinite]">
-          {phrases[i]}
-        </span>
-        <span className="flex gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
-          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
-          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
-        </span>
+    <div className="flex items-center gap-3">
+      <OrionLogo size={28} />
+      <div className="liquid-glass rounded-2xl px-4 py-2.5 flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "0ms" }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "150ms" }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "300ms" }} />
       </div>
     </div>
   );
 }
+
