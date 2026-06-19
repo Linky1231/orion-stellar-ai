@@ -287,7 +287,7 @@ export function ChatApp() {
       <DebugPanel open={debugOpen} onClose={() => setDebugOpen(false)} />
       <CodePanel open={codeOpen} onClose={() => setCodeOpen(false)} />
       <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
-      <DiagnosticsPanel open={diagOpen} onClose={() => setDiagOpen(false)} />
+      
     </div>
     </SpeechCtx.Provider>
   );
