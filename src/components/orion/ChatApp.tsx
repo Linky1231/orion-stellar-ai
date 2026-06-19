@@ -204,7 +204,7 @@ export function ChatApp() {
         onOpenNotes={() => setNotesOpen(true)}
         onOpenDebug={() => setDebugOpen(true)}
         onOpenCode={() => setCodeOpen(true)}
-        onOpenDiagnostics={() => setDiagOpen(true)}
+        
         onCreateImage={() => { newConv(); setImageMode(true); }}
       />
 
