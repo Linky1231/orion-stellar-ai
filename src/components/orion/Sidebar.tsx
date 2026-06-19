@@ -26,7 +26,6 @@ export function Sidebar({
   onOpenNotes: () => void;
   onOpenDebug: () => void;
   onOpenCode: () => void;
-  onOpenDiagnostics: () => void;
   onCreateImage: () => void;
 }) {
   const [convs, setConvs] = useState<Conv[]>([]);
