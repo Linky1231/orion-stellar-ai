@@ -409,12 +409,17 @@ function SpeakBtn({ id, text }: { id: string; text: string }) {
 
 function ThinkingIndicator() {
   return (
-    <div className="flex items-center gap-3">
-      <OrionLogo size={28} />
-      <div className="liquid-glass rounded-2xl px-4 py-2.5 flex items-center gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "0ms" }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "150ms" }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "300ms" }} />
+    <div className="flex items-center gap-3 animate-fade-in">
+      <div className="relative">
+        <OrionLogo size={28} glow />
+        <span className="absolute inset-0 rounded-full bg-primary/30 blur-md animate-pulse" />
+      </div>
+      <div className="liquid-glass rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-2 relative overflow-hidden">
+        <span className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite]" />
+        <span className="relative w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms", animationDuration: "1s" }} />
+        <span className="relative w-2 h-2 rounded-full bg-primary/80 animate-bounce" style={{ animationDelay: "150ms", animationDuration: "1s" }} />
+        <span className="relative w-2 h-2 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: "300ms", animationDuration: "1s" }} />
+        <span className="relative text-xs text-muted-foreground ml-1.5">Orión está pensando…</span>
       </div>
     </div>
   );
