@@ -8,7 +8,7 @@ import { OrionLogo } from "./OrionLogo";
 import { Sidebar } from "./Sidebar";
 import { NotesPanel } from "./NotesPanel";
 import { DebugPanel } from "./DebugPanel";
-import { CodePanel } from "./CodePanel";
+
 import { AdminPanel } from "./AdminPanel";
 
 import { Menu, Send, Paperclip, ImagePlus, Search, User, Copy, Volume2, Square, X, AlertTriangle, Sparkles } from "lucide-react";
