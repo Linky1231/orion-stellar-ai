@@ -11,7 +11,7 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_TEXT_MODEL = "google/gemini-2.5-flash-lite";
+const LOVABLE_TEXT_MODEL = "google/gemini-2.5-flash";
 const CHAT_TIMEOUT_MS = 2000;
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_MODEL = "gpt-4o-mini";
