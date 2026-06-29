@@ -26,7 +26,7 @@ export function ChatApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
-  const [codeOpen, setCodeOpen] = useState(false);
+  
   const [adminOpen, setAdminOpen] = useState(false);
   
   const [convId, setConvId] = useState<string | null>(null);
