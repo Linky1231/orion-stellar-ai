@@ -15,7 +15,7 @@ export function Sidebar({
   onNew,
   onOpenNotes,
   onOpenDebug,
-  onOpenCode,
+  
   onCreateImage,
 }: {
   open: boolean;
