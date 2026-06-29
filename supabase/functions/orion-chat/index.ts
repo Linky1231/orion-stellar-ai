@@ -395,33 +395,27 @@ function findImageBase64(value: any): string | null {
 }
 
 async function generatePublicImage(prompt: string) {
-  const start = await fetch("https://stablehorde.net/api/v2/generate/async", {
+  const key = Deno.env.get("LOVABLE_API_KEY");
+  if (!key) throw new Error("Falta LOVABLE_API_KEY para generar imágenes.");
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "apikey": HORDE_API_KEY,
-      "Client-Agent": HORDE_CLIENT_AGENT,
-    },
+    headers: { "content-type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify({
-      prompt,
-      params: { n: 1, width: 512, height: 512, steps: 12, cfg_scale: 7, sampler_name: "k_euler" },
-      nsfw: false,
-      censor_nsfw: true,
-      trusted_workers: false,
+      model: "google/gemini-2.5-flash-image",
+      messages: [{ role: "user", content: prompt }],
+      modalities: ["image", "text"],
     }),
   });
-  const startJson = await safeJson(start);
-  if (!start.ok || !startJson?.id) throw new Error(startJson?.message || startJson?.error || "El proveedor público rechazó la petición.");
-  const id = String(startJson.id);
-  for (let i = 0; i < 24; i++) {
-    await new Promise((res) => setTimeout(res, i === 0 ? 2500 : 5000));
-    const status = await fetch(`https://stablehorde.net/api/v2/generate/status/${id}`);
-    const statusJson = await safeJson(status);
-    const generation = statusJson?.generations?.[0];
-    if (generation?.img) return String(generation.img);
-    if (statusJson?.faulted) throw new Error("El proveedor público falló generando la imagen.");
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    if (r.status === 429) throw new Error("Límite de generación de imágenes alcanzado. Intenta en unos segundos.");
+    if (r.status === 402) throw new Error("Sin créditos de IA para generar imágenes.");
+    throw new Error(`Gemini Banana falló (${r.status}): ${t.slice(0, 200)}`);
   }
-  throw new Error("El proveedor público tardó demasiado. Intenta de nuevo.");
+  const j = await r.json().catch(() => null);
+  const b64 = j?.data?.[0]?.b64_json;
+  if (!b64) throw new Error("Gemini Banana no devolvió imagen.");
+  return `data:image/png;base64,${b64}`;
 }
 
 async function aiJSON(messages: any[], schema: any, name: string, _model = LOVABLE_TEXT_MODEL) {
