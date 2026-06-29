@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
-import { Search, Plus, Trash2, Pencil, MessageSquare, StickyNote, X, ImagePlus, Bug, Code2 } from "lucide-react";
+import { Search, Plus, Trash2, Pencil, MessageSquare, StickyNote, X, ImagePlus, Bug } from "lucide-react";
 import { OrionLogo } from "./OrionLogo";
 
 type Conv = { id: string; title: string; updated_at: string };
@@ -15,7 +15,7 @@ export function Sidebar({
   onNew,
   onOpenNotes,
   onOpenDebug,
-  onOpenCode,
+  
   onCreateImage,
 }: {
   open: boolean;
@@ -25,7 +25,7 @@ export function Sidebar({
   onNew: () => void;
   onOpenNotes: () => void;
   onOpenDebug: () => void;
-  onOpenCode: () => void;
+  
   onCreateImage: () => void;
 }) {
   const [convs, setConvs] = useState<Conv[]>([]);
@@ -118,12 +118,6 @@ export function Sidebar({
             className="w-full tap btn-glass flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm"
           >
             <Bug className="w-4 h-4 text-primary" /> Modo Debug
-          </button>
-          <button
-            onClick={() => { sfx.open(); onOpenCode(); }}
-            className="w-full tap btn-glass flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm"
-          >
-            <Code2 className="w-4 h-4 text-primary" /> Modo Code
           </button>
         </div>
 
