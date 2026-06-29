@@ -203,7 +203,6 @@ export function ChatApp() {
         onNew={newConv}
         onOpenNotes={() => setNotesOpen(true)}
         onOpenDebug={() => setDebugOpen(true)}
-        onOpenCode={() => setCodeOpen(true)}
         
         onCreateImage={() => { newConv(); setImageMode(true); }}
       />
