@@ -162,124 +162,16 @@ async function stableHordeJSON(messages: any[]) {
   return extractJsonObject(text);
 }
 
-const XTELL_URL = "https://xtell.io/api/chat/d6d2ac62-9cfc-49dd-8838-2dc9fa3e8b9f";
-const XTELL_REFERER = "https://xtell.io/widget/d6d2ac62-9cfc-49dd-8838-2dc9fa3e8b9f";
-
-function messagesHaveImages(messages: any[]) {
-  return messages.some((m) =>
-    Array.isArray(m?.content) && m.content.some((c: any) => c?.type === "image_url" || c?.type === "image")
-  );
-}
-
-function flattenForXtell(messages: any[]) {
-  // xtell solo acepta texto plano; concatenamos sistema + historial al último user
-  const sys = messages.filter((m) => m.role === "system").map((m) => typeof m.content === "string" ? m.content : "").filter(Boolean).join("\n\n");
-  const convo = messages.filter((m) => m.role !== "system");
-  // Tomamos el último mensaje del usuario y le anteponemos el contexto previo como texto
-  let lastUserIdx = -1;
-  for (let i = convo.length - 1; i >= 0; i--) if (convo[i].role === "user") { lastUserIdx = i; break; }
-  if (lastUserIdx === -1) return null;
-  const history = convo.slice(0, lastUserIdx).map((m) => {
-    const txt = typeof m.content === "string" ? m.content : (m.content?.map?.((c: any) => c?.text || "").join(" ") || "");
-    return `${m.role === "user" ? "Usuario" : "Asistente"}: ${txt}`;
-  }).join("\n");
-  const lastRaw = convo[lastUserIdx].content;
-  const lastText = typeof lastRaw === "string" ? lastRaw : (lastRaw?.map?.((c: any) => c?.text || "").join(" ") || "");
-  const composed = [sys && `[Instrucciones]\n${sys}`, history && `[Historial]\n${history}`, `[Mensaje actual]\n${lastText}`].filter(Boolean).join("\n\n");
-  return composed;
-}
-
-async function xtellAI(messages: any[], stream: boolean): Promise<Response | null> {
-  if (messagesHaveImages(messages)) return null; // no soporta visión
-  const text = flattenForXtell(messages);
-  if (!text) return null;
-  const visitorId = crypto.randomUUID();
-  const r = await fetch(XTELL_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "accept": "text/event-stream",
-      "referer": XTELL_REFERER,
-      "user-agent": "Mozilla/5.0 OrionEstellar/1.0",
-    },
-    body: JSON.stringify({
-      visitorId,
-      id: crypto.randomUUID().replace(/-/g, "").slice(0, 16),
-      messages: [{ id: crypto.randomUUID().replace(/-/g, "").slice(0, 16), role: "user", parts: [{ type: "text", text }] }],
-      trigger: "submit-message",
-    }),
-  }).catch((e) => { console.error("xtell fetch failed", String(e)); return null as Response | null; });
-  if (!r || !r.ok || !r.body) {
-    if (r) console.error("xtell api failed", r.status, (await r.text().catch(() => "")).slice(0, 200));
-    return null;
-  }
-  // Traducir Vercel AI UI stream → OpenAI-style SSE para el front
-  const reader = r.body.getReader();
-  const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
-  let buf = "";
-  let fullText = "";
-  const outStream = new ReadableStream({
-    start(controller) {
-      (async () => {
-        try {
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            let idx;
-            while ((idx = buf.indexOf("\n")) !== -1) {
-              const line = buf.slice(0, idx).replace(/\r$/, "");
-              buf = buf.slice(idx + 1);
-              if (!line.startsWith("data: ")) continue;
-              const payload = line.slice(6).trim();
-              if (payload === "[DONE]") continue;
-              try {
-                const obj = JSON.parse(payload);
-                if (obj?.type === "text-delta" && typeof obj.delta === "string") {
-                  fullText += obj.delta;
-                  if (stream) {
-                    const out = `data: ${JSON.stringify({ choices: [{ delta: { content: obj.delta } }] })}\n\n`;
-                    controller.enqueue(encoder.encode(out));
-                  }
-                }
-              } catch { /* ignore */ }
-            }
-          }
-          if (!stream) {
-            controller.enqueue(encoder.encode(JSON.stringify({ choices: [{ message: { content: fullText } }] })));
-          } else {
-            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          }
-          controller.close();
-        } catch (e) {
-          controller.error(e);
-        }
-      })();
-    },
-    cancel() { try { reader.cancel(); } catch {} },
-  });
-  return new Response(outStream, {
-    status: 200,
-    headers: {
-      "content-type": stream ? "text/event-stream" : "application/json",
-      "cache-control": "no-cache",
-    },
-  });
-}
-
 async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
   const key = Deno.env.get("OPENAI_API_KEY");
   let lastErr = "sin clave";
   let attempt = 0;
-  // 0) xtell (proveedor principal para texto/chat/notas). No usa visión ni JSON estructurado.
-  if (!jsonMode) {
-    console.log("xtell: trying", { stream, msgs: messages.length });
-    const xr = await xtellAI(messages, stream);
-    if (xr) { console.log("xtell: OK"); return xr; }
-    console.log("xtell: no response, falling back");
-    lastErr = "xtell sin respuesta";
-  }
+  // 0) Lovable AI Gateway (proveedor principal)
+  console.log("lovable: trying", { stream, msgs: messages.length });
+  const lr0 = await lovableAI(messages, stream, jsonMode, maxTokens);
+  if (lr0?.ok) { console.log("lovable: OK"); return lr0; }
+  console.log("lovable: no response, falling back");
+  lastErr = "lovable sin respuesta";
   // Espera infinita: reintenta mientras la API esté caída/saturada (429/5xx)
   while (true) {
     attempt++;
