@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
 import { streamChat, streamSearch, generateImage, uploadAttachment, extractAndStoreMemory, type ChatMsg } from "@/lib/orion-api";
+import { getLocalStatus, subscribeLocalStatus, loadLocalEngine, isWebGPUSupported, type LocalStatus } from "@/lib/webllm";
+
 import { OrionLogo } from "./OrionLogo";
 import { Sidebar } from "./Sidebar";
 import { NotesPanel } from "./NotesPanel";
