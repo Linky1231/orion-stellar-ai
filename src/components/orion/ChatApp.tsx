@@ -221,7 +221,12 @@ export function ChatApp() {
             <div className="font-semibold tracking-tight leading-tight">Orión Estellar</div>
             <div className="text-[11px] text-muted-foreground">v5.0 · por Linky</div>
           </div>
+          <LocalModelBadge />
         </header>
+
+        <LocalModelBanner />
+
+
 
 
         {/* Messages */}
