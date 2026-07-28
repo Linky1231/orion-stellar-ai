@@ -114,28 +114,63 @@ export async function uploadAttachment(file: File, bucket = "chat-attachments"):
   return data.publicUrl;
 }
 
-// Memory: extract facts from a user message and store them
+function parseJsonLoose(raw: string): any {
+  const s = raw.indexOf("{");
+  const e = raw.lastIndexOf("}");
+  if (s === -1 || e <= s) return {};
+  try { return JSON.parse(raw.slice(s, e + 1)); } catch { return {}; }
+}
+
+// Memoria: extrae hechos con el modelo local y los guarda
 export async function extractAndStoreMemory(text: string) {
   if (!text || text.length < 8) return;
   try {
-    const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ mode: "extract-memory", text }) });
-    const { facts } = await r.json();
+    const out = await localChatText(
+      [{ role: "user", content: text }],
+      {
+        system:
+          'Extrae hechos duraderos sobre el usuario del mensaje. Responde SOLO JSON: {"facts":[{"content":"...","kind":"fact"}]}. Si no hay hechos, {"facts":[]}.',
+        maxTokens: 200,
+        temperature: 0.1,
+      },
+    );
+    const facts = parseJsonLoose(out).facts;
     if (!Array.isArray(facts) || facts.length === 0) return;
     const did = getDeviceId();
-    await supabase.from("user_memory" as any).insert(facts.map((f: any) => ({ device_id: did, content: f.content, kind: f.kind || "fact" })));
+    await supabase.from("user_memory" as any).insert(
+      facts.filter((f: any) => f?.content).map((f: any) => ({ device_id: did, content: String(f.content), kind: f.kind || "fact" })),
+    );
   } catch (e) { console.warn("memory extract failed", e); }
 }
 
 export async function classifyNote(title: string, content: string) {
-  const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ mode: "classify-note", title, content }) });
-  return r.json();
+  const out = await localChatText(
+    [{ role: "user", content: `Título: ${title}\n\nContenido:\n${content}` }],
+    {
+      system:
+        'Clasifica la nota. Responde SOLO JSON: {"category":"","status":"","section":"","summary":""}. El resumen en español, máximo 200 caracteres.',
+      maxTokens: 250,
+      temperature: 0.2,
+    },
+  );
+  return parseJsonLoose(out);
 }
 
 export async function analyzeProject(notes: any[]): Promise<string> {
-  const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ mode: "analyze-project", notes }) });
-  const d = await r.json();
-  return d.analysis || "";
+  const resumen = notes
+    .map((n: any, i: number) => `${i + 1}. ${n.title || "(sin título)"} — ${(n.content || "").slice(0, 300)}`)
+    .join("\n");
+  return localChatText(
+    [{ role: "user", content: `Notas del proyecto:\n${resumen}` }],
+    {
+      system:
+        "Eres Orión. Analiza el proyecto a partir de las notas: estado, riesgos y próximos pasos. Español, claro y conciso (máximo 600 caracteres).",
+      maxTokens: 320,
+      temperature: 0.5,
+    },
+  );
 }
+
 
 export type DiagnosticsResult = {
   timestamp: string;
