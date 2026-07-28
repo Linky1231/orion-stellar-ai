@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
 import { streamChat, streamSearch, generateImage, uploadAttachment, extractAndStoreMemory, type ChatMsg } from "@/lib/orion-api";
+import { getLocalStatus, subscribeLocalStatus, loadLocalEngine, isWebGPUSupported, type LocalStatus } from "@/lib/webllm";
+
 import { OrionLogo } from "./OrionLogo";
 import { Sidebar } from "./Sidebar";
 import { NotesPanel } from "./NotesPanel";
@@ -22,6 +24,54 @@ type DBMsg = {
 
 const ADMIN_TOKEN = "Admin7880";
 
+function useLocalStatus() {
+  const [s, setS] = useState<LocalStatus>(getLocalStatus());
+  useEffect(() => subscribeLocalStatus(setS) as unknown as () => void, []);
+  return s;
+}
+
+function LocalModelBadge() {
+  const s = useLocalStatus();
+  const label =
+    s.phase === "ready" ? "Local · listo"
+    : s.phase === "loading" ? `Local · ${Math.round(s.progress * 100)}%`
+    : s.phase === "unsupported" ? "Local no disponible"
+    : s.phase === "error" ? "Local · error"
+    : "Local · en espera";
+  const tone =
+    s.phase === "ready" ? "text-primary"
+    : s.phase === "unsupported" || s.phase === "error" ? "text-destructive"
+    : "text-muted-foreground";
+  return (
+    <div className={`hidden sm:flex items-center gap-1.5 text-[11px] ${tone}`} title={s.text}>
+      <Sparkles className="w-3.5 h-3.5" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function LocalModelBanner() {
+  const s = useLocalStatus();
+  if (s.phase === "idle" || s.phase === "ready") return null;
+  return (
+    <div className="px-4 pt-2">
+      <div className="max-w-3xl mx-auto liquid-glass rounded-xl px-3 py-2 text-xs">
+        <div className="flex items-center gap-2">
+          {s.phase === "loading" ? <Sparkles className="w-3.5 h-3.5 animate-pulse text-primary" /> : <AlertTriangle className="w-3.5 h-3.5 text-destructive" />}
+          <span className="flex-1 truncate">{s.text}</span>
+          {s.phase === "loading" && <span className="tabular-nums">{Math.round(s.progress * 100)}%</span>}
+        </div>
+        {s.phase === "loading" && (
+          <div className="mt-2 h-1 rounded-full bg-muted overflow-hidden">
+            <div className="h-full bg-primary transition-all" style={{ width: `${Math.max(3, s.progress * 100)}%` }} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 export function ChatApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
@@ -39,6 +89,14 @@ export function ChatApp() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }); }, [messages, streaming]);
+
+  // Precarga el modelo local (WebGPU) al abrir la app: sin créditos, sin servidor.
+  useEffect(() => {
+    if (!isWebGPUSupported()) { loadLocalEngine().catch(() => {}); return; }
+    const t = window.setTimeout(() => { loadLocalEngine().catch(() => {}); }, 800);
+    return () => window.clearTimeout(t);
+  }, []);
+
 
   async function loadMessages(id: string) {
     const { data } = await supabase
@@ -221,7 +279,12 @@ export function ChatApp() {
             <div className="font-semibold tracking-tight leading-tight">Orión Estellar</div>
             <div className="text-[11px] text-muted-foreground">v5.0 · por Linky</div>
           </div>
+          <LocalModelBadge />
         </header>
+
+        <LocalModelBanner />
+
+
 
 
         {/* Messages */}
