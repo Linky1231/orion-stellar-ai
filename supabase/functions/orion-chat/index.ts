@@ -169,6 +169,35 @@ const POLLI_URL = "https://text.pollinations.ai/openai";
 const POLLI_MODELS = ["openai", "openai-fast", "mistral"];
 const POLLI_REFERRER = "orion-stellar-ai.lovable.app";
 
+const NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+const NVIDIA_MODELS = ["meta/llama-3.3-70b-instruct", "meta/llama-3.1-8b-instruct"];
+
+async function nvidiaAI(messages: any[], stream: boolean, jsonMode: boolean, maxTokens: number): Promise<Response | null> {
+  const key = Deno.env.get("NVIDIA_API_KEY");
+  if (!key) return null;
+  for (const model of NVIDIA_MODELS) {
+    const r = await fetch(NVIDIA_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "accept": stream ? "text/event-stream" : "application/json",
+        "authorization": `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream,
+        max_tokens: Math.min(maxTokens, 4096),
+        temperature: 0.6,
+        top_p: 0.9,
+      }),
+    }).catch((e) => { console.error("nvidia fetch failed", String(e)); return null as Response | null; });
+    if (r?.ok) { console.log("nvidia OK", model); return r; }
+    if (r) console.error("nvidia failed", model, r.status, (await r.text().catch(() => "")).slice(0, 200));
+  }
+  return null;
+}
+
 async function groqAI(messages: any[], stream: boolean, jsonMode: boolean, maxTokens: number): Promise<Response | null> {
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) return null;
@@ -225,7 +254,10 @@ async function pollinationsAI(messages: any[], stream: boolean, jsonMode: boolea
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
-  // 1) Groq — gratis, muy rápido y potente (Llama 3.3 70B)
+  // 1) NVIDIA NIM — clave propia del usuario, sin límite de créditos de Lovable
+  const n = await nvidiaAI(messages, stream, jsonMode, maxTokens);
+  if (n?.ok) return n;
+  // 2) Groq — gratis, muy rápido y potente (Llama 3.3 70B)
   const g = await groqAI(messages, stream, jsonMode, maxTokens);
   if (g?.ok) return g;
   // 2) Pollinations — nube pública gratuita sin clave
