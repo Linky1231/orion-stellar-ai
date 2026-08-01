@@ -170,33 +170,91 @@ const POLLI_MODELS = ["openai", "openai-fast", "mistral"];
 const POLLI_REFERRER = "orion-stellar-ai.lovable.app";
 
 const NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
-const NVIDIA_MODELS = ["meta/llama-3.3-70b-instruct", "meta/llama-3.1-8b-instruct"];
+const NVIDIA_MODELS = [
+  "meta/llama-3.3-70b-instruct",
+  "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+  "meta/llama-3.1-8b-instruct",
+];
+// Modelos NVIDIA con visión (para analizar capturas)
+const NVIDIA_VISION_MODELS = ["meta/llama-3.2-90b-vision-instruct", "meta/llama-3.2-11b-vision-instruct"];
+// Modelos NVIDIA de generación de imágenes
+const NVIDIA_IMAGE_MODELS = [
+  "black-forest-labs/flux.1-schnell",
+  "black-forest-labs/flux.1-dev",
+  "stabilityai/stable-diffusion-3-medium",
+];
 
-async function nvidiaAI(messages: any[], stream: boolean, jsonMode: boolean, maxTokens: number): Promise<Response | null> {
+async function nvidiaCall(model: string, messages: any[], stream: boolean, maxTokens: number): Promise<Response | null> {
+  const key = Deno.env.get("NVIDIA_API_KEY");
+  if (!key) return null;
+  return await fetch(NVIDIA_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "accept": stream ? "text/event-stream" : "application/json",
+      "authorization": `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      stream,
+      max_tokens: Math.min(maxTokens, 4096),
+      temperature: 0.6,
+      top_p: 0.9,
+    }),
+  }).catch((e) => { console.error("nvidia fetch failed", model, String(e)); return null as Response | null; });
+}
+
+async function nvidiaAI(messages: any[], stream: boolean, _jsonMode: boolean, maxTokens: number): Promise<Response | null> {
   const key = Deno.env.get("NVIDIA_API_KEY");
   if (!key) return null;
   for (const model of NVIDIA_MODELS) {
-    const r = await fetch(NVIDIA_URL, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "accept": stream ? "text/event-stream" : "application/json",
-        "authorization": `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        stream,
-        max_tokens: Math.min(maxTokens, 4096),
-        temperature: 0.6,
-        top_p: 0.9,
-      }),
-    }).catch((e) => { console.error("nvidia fetch failed", String(e)); return null as Response | null; });
+    const r = await nvidiaCall(model, messages, stream, maxTokens);
     if (r?.ok) { console.log("nvidia OK", model); return r; }
     if (r) console.error("nvidia failed", model, r.status, (await r.text().catch(() => "")).slice(0, 200));
   }
   return null;
 }
+
+async function nvidiaVisionAI(messages: any[], stream: boolean, maxTokens = 2048): Promise<Response | null> {
+  const key = Deno.env.get("NVIDIA_API_KEY");
+  if (!key) return null;
+  for (const model of NVIDIA_VISION_MODELS) {
+    const r = await nvidiaCall(model, messages, stream, maxTokens);
+    if (r?.ok) { console.log("nvidia vision OK", model); return r; }
+    if (r) console.error("nvidia vision failed", model, r.status, (await r.text().catch(() => "")).slice(0, 200));
+  }
+  return null;
+}
+
+async function nvidiaImage(prompt: string): Promise<string | null> {
+  const key = Deno.env.get("NVIDIA_API_KEY");
+  if (!key) return null;
+  for (const model of NVIDIA_IMAGE_MODELS) {
+    try {
+      const r = await fetchWithTimeout(`https://ai.api.nvidia.com/v1/genai/${model}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json", authorization: `Bearer ${key}` },
+        body: JSON.stringify(
+          model.includes("flux")
+            ? { prompt, width: 1024, height: 1024, steps: model.includes("schnell") ? 4 : 28, cfg_scale: 3.5, seed: Math.floor(Math.random() * 1e6) }
+            : { prompt, mode: "text-to-image", cfg_scale: 5, aspect_ratio: "1:1", seed: Math.floor(Math.random() * 1e6), steps: 30 },
+        ),
+      }, 60000);
+      if (!r.ok) { console.error("nvidia image failed", model, r.status, (await r.text().catch(() => "")).slice(0, 200)); continue; }
+      const j = await r.json().catch(() => null);
+      const b64 = j?.artifacts?.[0]?.base64 || j?.image || j?.data?.[0]?.b64_json || findImageBase64(j);
+      if (typeof b64 === "string" && b64.length > 100) {
+        console.log("nvidia image OK", model);
+        return b64.startsWith("data:") ? b64 : `data:image/jpeg;base64,${b64}`;
+      }
+    } catch (e) {
+      console.error("nvidia image error", model, String(e));
+    }
+  }
+  return null;
+}
+
 
 async function groqAI(messages: any[], stream: boolean, jsonMode: boolean, maxTokens: number): Promise<Response | null> {
   const key = Deno.env.get("GROQ_API_KEY");
@@ -293,6 +351,8 @@ async function freeAI(messages: any[], stream = false, jsonMode = false, maxToke
 
 
 async function freeVisionAI(messages: any[], stream = false): Promise<Response> {
+  const nv = await nvidiaVisionAI(messages, stream);
+  if (nv?.ok) return nv;
   return freeAI(messages, stream);
 }
 
@@ -467,8 +527,11 @@ function findImageBase64(value: any): string | null {
 }
 
 async function generatePublicImage(prompt: string) {
+  // 1) NVIDIA (FLUX / SD3) — clave propia, sin créditos de Lovable
+  const nv = await nvidiaImage(prompt);
+  if (nv) return nv;
   const key = Deno.env.get("LOVABLE_API_KEY");
-  if (!key) throw new Error("Falta LOVABLE_API_KEY para generar imágenes.");
+  if (!key) throw new Error("No se pudo generar la imagen con NVIDIA y no hay proveedor de respaldo configurado.");
   const r = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
     method: "POST",
     headers: { "content-type": "application/json", Authorization: `Bearer ${key}` },
