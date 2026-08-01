@@ -56,7 +56,7 @@ export function AuthScreen() {
     <div className="min-h-screen flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm liquid-glass rounded-3xl p-7 space-y-6">
         <div className="flex flex-col items-center gap-3 text-center">
-          <OrionLogo className="w-14 h-14" />
+          <OrionLogo size={56} glow />
           <div>
             <h1 className="text-xl font-semibold">Orión Estellar</h1>
             <p className="text-xs text-muted-foreground mt-1">
