@@ -41,12 +41,6 @@ export function isWebGPUSupported() {
   return typeof navigator !== "undefined" && "gpu" in navigator;
 }
 
-function pickModel() {
-  const mem = (navigator as any).deviceMemory as number | undefined;
-  if (typeof mem === "number" && mem > 0 && mem < 6) return LOCAL_MODEL_SMALL;
-  return LOCAL_MODEL;
-}
-
 let enginePromise: Promise<MLCEngine> | null = null;
 
 export function loadLocalEngine(): Promise<MLCEngine> {
@@ -59,23 +53,33 @@ export function loadLocalEngine(): Promise<MLCEngine> {
     }
     setStatus({ phase: "loading", progress: 0, text: "Preparando modelo local…" });
     const { CreateMLCEngine } = await import("@mlc-ai/web-llm");
-    try {
-      const engine = await CreateMLCEngine(pickModel(), {
-        initProgressCallback: (p) => {
-          setStatus({ phase: "loading", progress: p.progress ?? 0, text: p.text || "Descargando modelo local…" });
-        },
-      });
-      setStatus({ phase: "ready", progress: 1, text: "Modelo local listo" });
-      return engine;
-    } catch (e: any) {
-      enginePromise = null;
-      setStatus({ phase: "error", text: e?.message || "No se pudo cargar el modelo local" });
-      throw e;
+
+    let lastError: unknown = null;
+    for (const model of MODEL_CHAIN) {
+      try {
+        const engine = await CreateMLCEngine(model, {
+          initProgressCallback: (p) => {
+            setStatus({ phase: "loading", progress: p.progress ?? 0, text: p.text || "Descargando modelo local…" });
+          },
+        });
+        setStatus({ phase: "ready", progress: 1, text: `Modelo local listo (${model.split("-Instruct")[0]})` });
+        return engine;
+      } catch (e) {
+        lastError = e;
+        console.warn(`WebLLM: falló ${model}, probando el siguiente…`, e);
+        setStatus({ phase: "loading", progress: 0, text: "Reintentando con otro modelo más ligero…" });
+      }
     }
+
+    enginePromise = null;
+    const msg = (lastError as any)?.message || "No se pudo cargar el modelo local";
+    setStatus({ phase: "error", text: msg });
+    throw new Error(msg);
   })();
 
   return enginePromise;
 }
+
 
 export type LocalMsg = { role: "user" | "assistant" | "system"; content: any };
 
