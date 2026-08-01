@@ -1,6 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
-import { localChatStream, localChatText } from "@/lib/webllm";
 
 
 const FN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orion-chat`;
