@@ -1,6 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
-import { localChatStream, localChatText } from "@/lib/webllm";
 
 
 const FN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orion-chat`;
@@ -68,22 +67,19 @@ async function streamFromBody(body: Record<string, unknown>, onDelta: (s: string
   if (buf.trim() && !done) processLine(buf.trim());
 }
 
-// ---- Texto: 100% local en el navegador (WebLLM). No usa créditos. ----
+// ---- Texto: IA gratuita en la nube (Groq / Pollinations) vía la función del backend ----
 export async function streamChat(messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
-  return localChatStream(messages, onDelta, { signal });
+  return streamFromBody({ mode: "chat", messages, deviceId: getDeviceId() }, onDelta, signal);
 }
 
 export async function streamSearch(query: string, messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
-  return localChatStream(messages, onDelta, {
-    signal,
-    system:
-      "Eres Orión, una asistente de IA local en español. No tienes acceso a internet: responde con tu conocimiento interno y avisa si el dato puede estar desactualizado. Máximo 600 caracteres.",
-  });
+  return streamFromBody({ mode: "web-search", query, messages, deviceId: getDeviceId() }, onDelta, signal);
 }
 
 export async function streamDebugVisual(imageUrl: string, notes: string, onDelta: (s: string) => void, signal?: AbortSignal) {
   return streamFromBody({ mode: "debug-visual", imageUrl, notes, deviceId: getDeviceId() }, onDelta, signal);
 }
+
 
 
 
@@ -121,20 +117,18 @@ function parseJsonLoose(raw: string): any {
   try { return JSON.parse(raw.slice(s, e + 1)); } catch { return {}; }
 }
 
-// Memoria: extrae hechos con el modelo local y los guarda
+async function postJson(body: Record<string, unknown>) {
+  const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+// Memoria: extrae hechos con la IA en la nube y los guarda
 export async function extractAndStoreMemory(text: string) {
   if (!text || text.length < 8) return;
   try {
-    const out = await localChatText(
-      [{ role: "user", content: text }],
-      {
-        system:
-          'Extrae hechos duraderos sobre el usuario del mensaje. Responde SOLO JSON: {"facts":[{"content":"...","kind":"fact"}]}. Si no hay hechos, {"facts":[]}.',
-        maxTokens: 200,
-        temperature: 0.1,
-      },
-    );
-    const facts = parseJsonLoose(out).facts;
+    const out: any = await postJson({ mode: "extract-memory", text, deviceId: getDeviceId() });
+    const facts = out?.facts;
     if (!Array.isArray(facts) || facts.length === 0) return;
     const did = getDeviceId();
     await supabase.from("user_memory" as any).insert(
@@ -144,32 +138,18 @@ export async function extractAndStoreMemory(text: string) {
 }
 
 export async function classifyNote(title: string, content: string) {
-  const out = await localChatText(
-    [{ role: "user", content: `Título: ${title}\n\nContenido:\n${content}` }],
-    {
-      system:
-        'Clasifica la nota. Responde SOLO JSON: {"category":"","status":"","section":"","summary":""}. El resumen en español, máximo 200 caracteres.',
-      maxTokens: 250,
-      temperature: 0.2,
-    },
-  );
-  return parseJsonLoose(out);
+  try {
+    return await postJson({ mode: "classify-note", title, content, deviceId: getDeviceId() });
+  } catch {
+    return {};
+  }
 }
 
 export async function analyzeProject(notes: any[]): Promise<string> {
-  const resumen = notes
-    .map((n: any, i: number) => `${i + 1}. ${n.title || "(sin título)"} — ${(n.content || "").slice(0, 300)}`)
-    .join("\n");
-  return localChatText(
-    [{ role: "user", content: `Notas del proyecto:\n${resumen}` }],
-    {
-      system:
-        "Eres Orión. Analiza el proyecto a partir de las notas: estado, riesgos y próximos pasos. Español, claro y conciso (máximo 600 caracteres).",
-      maxTokens: 320,
-      temperature: 0.5,
-    },
-  );
+  const out: any = await postJson({ mode: "analyze-project", notes, deviceId: getDeviceId() });
+  return String(out?.analysis || "");
 }
+
 
 
 export type DiagnosticsResult = {

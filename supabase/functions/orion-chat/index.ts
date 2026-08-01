@@ -162,63 +162,103 @@ async function stableHordeJSON(messages: any[]) {
   return extractJsonObject(text);
 }
 
-async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
-  const key = Deno.env.get("OPENAI_API_KEY");
-  let lastErr = "sin clave";
-  let attempt = 0;
-  // 0) Lovable AI Gateway (proveedor principal)
-  console.log("lovable: trying", { stream, msgs: messages.length });
-  const lr0 = await lovableAI(messages, stream, jsonMode, maxTokens);
-  if (lr0?.ok) { console.log("lovable: OK"); return lr0; }
-  console.log("lovable: no response, falling back");
-  lastErr = "lovable sin respuesta";
-  // Espera infinita: reintenta mientras la API esté caída/saturada (429/5xx)
-  while (true) {
-    attempt++;
-    // 1) OpenAI
-    if (key) {
-      const r = await fetch(OPENAI_URL, {
+// ---- Proveedores en la nube GRATIS (sin créditos de Lovable) ----
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+const POLLI_URL = "https://text.pollinations.ai/openai";
+const POLLI_MODELS = ["openai", "openai-fast", "mistral"];
+const POLLI_REFERRER = "orion-stellar-ai.lovable.app";
+
+async function groqAI(messages: any[], stream: boolean, jsonMode: boolean, maxTokens: number): Promise<Response | null> {
+  const key = Deno.env.get("GROQ_API_KEY");
+  if (!key) return null;
+  for (const model of GROQ_MODELS) {
+    const r = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "accept": stream ? "text/event-stream" : "application/json",
+        "authorization": `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream,
+        max_tokens: Math.min(maxTokens, 4096),
+        temperature: 0.6,
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      }),
+    }).catch((e) => { console.error("groq fetch failed", String(e)); return null as Response | null; });
+    if (r?.ok) { console.log("groq OK", model); return r; }
+    if (r) console.error("groq failed", model, r.status, (await r.text().catch(() => "")).slice(0, 200));
+  }
+  return null;
+}
+
+async function pollinationsAI(messages: any[], stream: boolean, jsonMode: boolean, maxTokens: number): Promise<Response | null> {
+  for (const model of POLLI_MODELS) {
+    try {
+      const r = await fetchWithTimeout(`${POLLI_URL}?referrer=${POLLI_REFERRER}`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "accept": stream ? "text/event-stream" : "application/json",
-          "authorization": `Bearer ${key}`,
-        },
+        headers: { "content-type": "application/json", "referer": `https://${POLLI_REFERRER}` },
         body: JSON.stringify({
-          model: OPENAI_MODEL,
+          model,
           messages,
-          stream,
-          max_tokens: maxTokens,
+          max_tokens: Math.min(maxTokens, 2048),
           temperature: 0.6,
+          referrer: POLLI_REFERRER,
           ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
         }),
-      }).catch((e) => { console.error("openai fetch failed", String(e)); return null as Response | null; });
-      if (r?.ok) return r;
-      if (r) {
-        const errTxt = await r.text().catch(() => "");
-        lastErr = `openai ${r.status}`;
-        console.error("openai api failed", r.status, errTxt.slice(0, 200), "attempt", attempt);
-        // Errores no recuperables: clave inválida / petición mal formada → no reintentar OpenAI
-        if (r.status === 400 || r.status === 401 || r.status === 403 || r.status === 404) {
-          // pasar a fallback
-        } else {
-          // 429 / 5xx → backoff y reintenta OpenAI
-          const wait = Math.min(30000, 1000 * Math.pow(2, Math.min(attempt, 5)));
-          await new Promise((res) => setTimeout(res, wait));
-          continue;
-        }
+      }, 20000);
+      const data = await readJsonSafe(r);
+      const content = data?.choices?.[0]?.message?.content;
+      if (r.ok && typeof content === "string" && content.trim()) {
+        console.log("pollinations OK", model);
+        return textResponseAsAI(content, stream, jsonMode);
       }
+      console.error("pollinations failed", model, r.status);
+    } catch (e) {
+      console.error("pollinations error", model, String(e));
     }
-    // 2) Lovable AI Gateway (fallback)
-    const lr = await lovableAI(messages, stream, jsonMode, maxTokens);
-    if (lr?.ok) return lr;
-    lastErr = `${lastErr}; lovable sin respuesta`;
-    // Si ambos fallan, espera antes de volver a intentar
-    const wait = Math.min(30000, 1000 * Math.pow(2, Math.min(attempt, 5)));
-    console.error("ambos proveedores fallaron, reintentando en", wait, "ms —", lastErr);
-    await new Promise((res) => setTimeout(res, wait));
   }
+  return null;
 }
+
+async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
+  // 1) Groq — gratis, muy rápido y potente (Llama 3.3 70B)
+  const g = await groqAI(messages, stream, jsonMode, maxTokens);
+  if (g?.ok) return g;
+  // 2) Pollinations — nube pública gratuita sin clave
+  const p = await pollinationsAI(messages, stream, jsonMode, maxTokens);
+  if (p?.ok) return p;
+  // 3) OpenAI propio (si hay clave)
+  const key = Deno.env.get("OPENAI_API_KEY");
+  if (key) {
+    const r = await fetch(OPENAI_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "accept": stream ? "text/event-stream" : "application/json",
+        "authorization": `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        messages,
+        stream,
+        max_tokens: maxTokens,
+        temperature: 0.6,
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      }),
+    }).catch(() => null as Response | null);
+    if (r?.ok) return r;
+    if (r) console.error("openai failed", r.status);
+  }
+  // 4) Último recurso: Lovable AI (usa créditos)
+  const lr = await lovableAI(messages, stream, jsonMode, maxTokens);
+  if (lr?.ok) return lr;
+  return quickFallback(stream);
+}
+
 
 async function freeVisionAI(messages: any[], stream = false): Promise<Response> {
   return freeAI(messages, stream);
