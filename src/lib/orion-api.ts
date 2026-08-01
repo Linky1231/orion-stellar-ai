@@ -68,22 +68,19 @@ async function streamFromBody(body: Record<string, unknown>, onDelta: (s: string
   if (buf.trim() && !done) processLine(buf.trim());
 }
 
-// ---- Texto: 100% local en el navegador (WebLLM). No usa créditos. ----
+// ---- Texto: IA gratuita en la nube (Groq / Pollinations) vía la función del backend ----
 export async function streamChat(messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
-  return localChatStream(messages, onDelta, { signal });
+  return streamFromBody({ mode: "chat", messages, deviceId: getDeviceId() }, onDelta, signal);
 }
 
 export async function streamSearch(query: string, messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
-  return localChatStream(messages, onDelta, {
-    signal,
-    system:
-      "Eres Orión, una asistente de IA local en español. No tienes acceso a internet: responde con tu conocimiento interno y avisa si el dato puede estar desactualizado. Máximo 600 caracteres.",
-  });
+  return streamFromBody({ mode: "web-search", query, messages, deviceId: getDeviceId() }, onDelta, signal);
 }
 
 export async function streamDebugVisual(imageUrl: string, notes: string, onDelta: (s: string) => void, signal?: AbortSignal) {
   return streamFromBody({ mode: "debug-visual", imageUrl, notes, deviceId: getDeviceId() }, onDelta, signal);
 }
+
 
 
 
