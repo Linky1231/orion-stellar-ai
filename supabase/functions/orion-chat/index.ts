@@ -209,7 +209,7 @@ async function pollinationsAI(messages: any[], stream: boolean, jsonMode: boolea
           referrer: POLLI_REFERRER,
           ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
         }),
-      }, 45000);
+      }, 20000);
       const data = await readJsonSafe(r);
       const content = data?.choices?.[0]?.message?.content;
       if (r.ok && typeof content === "string" && content.trim()) {
