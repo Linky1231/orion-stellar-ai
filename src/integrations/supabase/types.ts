@@ -21,6 +21,7 @@ export type Database = {
           id: string
           title: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -28,6 +29,7 @@ export type Database = {
           id?: string
           title?: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -35,6 +37,7 @@ export type Database = {
           id?: string
           title?: string
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -83,6 +86,7 @@ export type Database = {
           section: string
           status: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           color?: string
@@ -93,6 +97,7 @@ export type Database = {
           section?: string
           status?: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           color?: string
@@ -103,6 +108,7 @@ export type Database = {
           section?: string
           status?: string
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -120,6 +126,7 @@ export type Database = {
           status: string
           title: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           ai_summary?: string | null
@@ -134,6 +141,7 @@ export type Database = {
           status?: string
           title?: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           ai_summary?: string | null
@@ -148,6 +156,7 @@ export type Database = {
           status?: string
           title?: string
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -261,6 +270,30 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_memory: {
         Row: {
           content: string
@@ -268,6 +301,7 @@ export type Database = {
           device_id: string
           id: string
           kind: string
+          user_id: string | null
         }
         Insert: {
           content: string
@@ -275,6 +309,7 @@ export type Database = {
           device_id: string
           id?: string
           kind?: string
+          user_id?: string | null
         }
         Update: {
           content?: string
@@ -282,6 +317,7 @@ export type Database = {
           device_id?: string
           id?: string
           kind?: string
+          user_id?: string | null
         }
         Relationships: []
       }
