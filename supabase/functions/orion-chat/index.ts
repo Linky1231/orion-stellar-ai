@@ -351,6 +351,8 @@ async function freeAI(messages: any[], stream = false, jsonMode = false, maxToke
 
 
 async function freeVisionAI(messages: any[], stream = false): Promise<Response> {
+  const nv = await nvidiaVisionAI(messages, stream);
+  if (nv?.ok) return nv;
   return freeAI(messages, stream);
 }
 
