@@ -182,6 +182,7 @@ export function Sidebar({
             </div>
           ))}
         </div>
+        <ProfileFooter />
       </aside>
     </>
   );
