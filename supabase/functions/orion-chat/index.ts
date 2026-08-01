@@ -525,8 +525,11 @@ function findImageBase64(value: any): string | null {
 }
 
 async function generatePublicImage(prompt: string) {
+  // 1) NVIDIA (FLUX / SD3) — clave propia, sin créditos de Lovable
+  const nv = await nvidiaImage(prompt);
+  if (nv) return nv;
   const key = Deno.env.get("LOVABLE_API_KEY");
-  if (!key) throw new Error("Falta LOVABLE_API_KEY para generar imágenes.");
+  if (!key) throw new Error("No se pudo generar la imagen con NVIDIA y no hay proveedor de respaldo configurado.");
   const r = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
     method: "POST",
     headers: { "content-type": "application/json", Authorization: `Bearer ${key}` },
