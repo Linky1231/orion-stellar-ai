@@ -9,8 +9,15 @@ export type LocalStatus = {
   text: string;
 };
 
-export const LOCAL_MODEL = "Llama-3.2-3B-Instruct-q4f16_1-MLC";
-export const LOCAL_MODEL_SMALL = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+// Modelos ligeros y fiables (orden de intento: del más ligero al más capaz).
+export const LOCAL_MODEL = "Qwen2.5-1.5B-Instruct-q4f16_1-MLC";
+export const LOCAL_MODEL_SMALL = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+
+const MODEL_CHAIN = [
+  "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
+  "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+  "Llama-3.2-1B-Instruct-q4f32_1-MLC",
+];
 
 let status: LocalStatus = { phase: "idle", progress: 0, text: "Modelo local no cargado" };
 const listeners = new Set<(s: LocalStatus) => void>();
