@@ -41,12 +41,8 @@ export function ChatApp() {
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }); }, [messages, streaming]);
 
-  // Precarga el modelo local (WebGPU) al abrir la app: sin créditos, sin servidor.
-  useEffect(() => {
-    if (!isWebGPUSupported()) { loadLocalEngine().catch(() => {}); return; }
-    const t = window.setTimeout(() => { loadLocalEngine().catch(() => {}); }, 800);
-    return () => window.clearTimeout(t);
-  }, []);
+
+
 
 
   async function loadMessages(id: string) {
