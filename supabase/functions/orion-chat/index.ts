@@ -334,7 +334,7 @@ function prexzyPrompt(messages: any[]) {
 
 async function prexzyAI(messages: any[], stream: boolean, jsonMode: boolean): Promise<Response | null> {
   try {
-    const r = await fetchWithTimeout(`${PREXZY_CHAT}?prompt=${encodeURIComponent(messagesToPrompt(messages))}`, {
+    const r = await fetchWithTimeout(`${PREXZY_CHAT}?prompt=${encodeURIComponent(prexzyPrompt(messages))}`, {
       method: "GET",
       headers: { accept: "application/json" },
     }, 30000);
