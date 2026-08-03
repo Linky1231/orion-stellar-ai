@@ -372,14 +372,16 @@ async function prexzyImage(prompt: string, model?: string, ratio?: string): Prom
 }
 
 async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
-  // 0) Prexzy — IA gratuita sin clave (no soporta JSON estricto)
+  // 1) NVIDIA NIM — sí respeta el historial completo de la conversación
+  const n = await nvidiaAI(messages, stream, jsonMode, maxTokens);
+  if (n?.ok) return n;
+
+  // 2) Prexzy — respaldo gratuito sin clave (no soporta JSON estricto)
   if (!jsonMode) {
     const px = await prexzyAI(messages, stream, jsonMode);
     if (px?.ok) return px;
   }
-  // 1) NVIDIA NIM — clave propia del usuario, sin límite de créditos de Lovable
-  const n = await nvidiaAI(messages, stream, jsonMode, maxTokens);
-  if (n?.ok) return n;
+
 
   // 2) Groq — gratis, muy rápido y potente (Llama 3.3 70B)
   const g = await groqAI(messages, stream, jsonMode, maxTokens);
