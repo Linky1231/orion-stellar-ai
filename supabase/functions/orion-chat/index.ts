@@ -702,7 +702,7 @@ Deno.serve(async (req) => {
         ? `${String(prompt || "imagen creativa")}. Contexto del proyecto indie del usuario: ${noteContext}. Mantén coherencia con esas notas.`
         : String(prompt || "imagen creativa");
       const finalPrompt = enrichedPrompt.slice(0, 1200);
-      const externalUrl = await generatePublicImage(finalPrompt);
+      const externalUrl = await generatePublicImage(finalPrompt, (body as any).model, (body as any).ratio);
       const imgRes = await fetch(externalUrl);
       if (!imgRes.ok) throw new Error("No se pudo descargar la imagen generada.");
       const contentType = imgRes.headers.get("content-type") || "image/webp";
