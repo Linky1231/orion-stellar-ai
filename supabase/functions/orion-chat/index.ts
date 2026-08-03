@@ -590,7 +590,10 @@ function findImageBase64(value: any): string | null {
   return null;
 }
 
-async function generatePublicImage(prompt: string) {
+async function generatePublicImage(prompt: string, model?: string, ratio?: string) {
+  // 0) Prexzy AI Art — gratis, sin clave
+  const px = await prexzyImage(prompt, model, ratio);
+  if (px) return px;
   // 1) NVIDIA (FLUX / SD3) — clave propia, sin créditos de Lovable
   const nv = await nvidiaImage(prompt);
   if (nv) return nv;
