@@ -311,10 +311,74 @@ async function pollinationsAI(messages: any[], stream: boolean, jsonMode: boolea
   return null;
 }
 
+// ---- Prexzy APIs (gratis, sin clave) ----
+const PREXZY_CHAT = "https://prexzyapis.com/ai/aichat";
+const PREXZY_ART = "https://prexzyapis.com/ai/aiart";
+
+function messagesToPrompt(messages: any[]) {
+  return messages
+    .map((m: any) => {
+      const content = typeof m.content === "string"
+        ? m.content
+        : Array.isArray(m.content)
+          ? m.content.map((c: any) => c?.text || "").join(" ")
+          : "";
+      const who = m.role === "system" ? "Instrucciones" : m.role === "assistant" ? "Asistente" : "Usuario";
+      return `${who}: ${content}`;
+    })
+    .filter(Boolean)
+    .join("\n\n")
+    .slice(0, 6000) + "\n\nAsistente:";
+}
+
+async function prexzyAI(messages: any[], stream: boolean, jsonMode: boolean): Promise<Response | null> {
+  try {
+    const r = await fetchWithTimeout(`${PREXZY_CHAT}?prompt=${encodeURIComponent(messagesToPrompt(messages))}`, {
+      method: "GET",
+      headers: { accept: "application/json" },
+    }, 30000);
+    const d = await readJsonSafe(r);
+    const content = d?.response || d?.result || d?.message;
+    if (r.ok && typeof content === "string" && content.trim()) {
+      console.log("prexzy OK");
+      return textResponseAsAI(content.trim(), stream, jsonMode);
+    }
+    console.error("prexzy failed", r.status);
+  } catch (e) {
+    console.error("prexzy error", String(e));
+  }
+  return null;
+}
+
+async function prexzyImage(prompt: string, model?: string, ratio?: string): Promise<string | null> {
+  try {
+    const qs = new URLSearchParams({ prompt });
+    if (model) qs.set("model", model);
+    if (ratio) qs.set("ratio", ratio);
+    const r = await fetchWithTimeout(`${PREXZY_ART}?${qs.toString()}`, { method: "GET", headers: { accept: "application/json" } }, 90000);
+    const d = await readJsonSafe(r);
+    const url = d?.image_url || d?.images?.[0] || d?.url;
+    if (r.ok && typeof url === "string" && url.startsWith("http")) {
+      console.log("prexzy art OK", d?.model);
+      return url;
+    }
+    console.error("prexzy art failed", r.status);
+  } catch (e) {
+    console.error("prexzy art error", String(e));
+  }
+  return null;
+}
+
 async function freeAI(messages: any[], stream = false, jsonMode = false, maxTokens = 8192): Promise<Response> {
+  // 0) Prexzy — IA gratuita sin clave (no soporta JSON estricto)
+  if (!jsonMode) {
+    const px = await prexzyAI(messages, stream, jsonMode);
+    if (px?.ok) return px;
+  }
   // 1) NVIDIA NIM — clave propia del usuario, sin límite de créditos de Lovable
   const n = await nvidiaAI(messages, stream, jsonMode, maxTokens);
   if (n?.ok) return n;
+
   // 2) Groq — gratis, muy rápido y potente (Llama 3.3 70B)
   const g = await groqAI(messages, stream, jsonMode, maxTokens);
   if (g?.ok) return g;
