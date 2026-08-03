@@ -315,7 +315,7 @@ async function pollinationsAI(messages: any[], stream: boolean, jsonMode: boolea
 const PREXZY_CHAT = "https://prexzyapis.com/ai/aichat";
 const PREXZY_ART = "https://prexzyapis.com/ai/aiart";
 
-function messagesToPrompt(messages: any[]) {
+function prexzyPrompt(messages: any[]) {
   return messages
     .map((m: any) => {
       const content = typeof m.content === "string"
@@ -330,6 +330,7 @@ function messagesToPrompt(messages: any[]) {
     .join("\n\n")
     .slice(0, 6000) + "\n\nAsistente:";
 }
+
 
 async function prexzyAI(messages: any[], stream: boolean, jsonMode: boolean): Promise<Response | null> {
   try {
