@@ -1,96 +1,74 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
-
-
-const FN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orion-chat`;
-const ANON = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+import { loadPuter, puterChat, readPuterText, PUTER_MODELS } from "@/lib/puter";
 
 export type ChatMsg = { role: "user" | "assistant" | "system"; content: any };
 
-const HEADERS = { "content-type": "application/json", apikey: ANON, authorization: `Bearer ${ANON}` };
-
-async function streamFromBody(body: Record<string, unknown>, onDelta: (s: string) => void, signal?: AbortSignal) {
-  const r = await fetch(FN_URL, {
-    method: "POST",
-    headers: HEADERS,
-    body: JSON.stringify(body),
-    signal,
-  });
-  const contentType = r.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
-    const d = await r.json().catch(() => null);
-    const message = d?.message || d?.error;
-    if (message) onDelta(String(message));
-    if (!r.ok && !message) throw new Error(`HTTP ${r.status}`);
-    return;
-  }
-  if (!r.ok || !r.body) {
-    const t = await r.text().catch(() => "");
-    if (r.status === 402) throw new Error("El proveedor público no aceptó la petición ahora mismo. Intenta de nuevo en unos segundos.");
-    if (r.status === 429) throw new Error("Demasiadas peticiones. Espera unos segundos e intenta de nuevo.");
-    throw new Error(t || `HTTP ${r.status}`);
-  }
-  const reader = r.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  let done = false;
-  const readContent = (p: any) => p?.choices?.[0]?.delta?.content || p?.choices?.[0]?.message?.content || p?.message || p?.response || p?.text || "";
-  const processLine = (rawLine: string) => {
-    let line = rawLine;
-    if (line.endsWith("\r")) line = line.slice(0, -1);
-    if (!line.startsWith("data: ")) return false;
-    const json = line.slice(6).trim();
-    if (json === "[DONE]") return true;
-    try {
-      const p = JSON.parse(json);
-      const c = readContent(p);
-      if (c) onDelta(String(c));
-    } catch {
-      buf = line + "\n" + buf;
-      return true;
-    }
-    return false;
-  };
-  while (!done) {
-    const { value, done: d } = await reader.read();
-    if (d) break;
-    buf += decoder.decode(value, { stream: true });
-    let idx;
-    while ((idx = buf.indexOf("\n")) !== -1) {
-      const line = buf.slice(0, idx);
-      buf = buf.slice(idx + 1);
-      done = processLine(line);
-      if (done) break;
-    }
-  }
-  buf += decoder.decode();
-  if (buf.trim() && !done) processLine(buf.trim());
+function toPuterMessages(messages: ChatMsg[]) {
+  return messages.map((m) => ({
+    role: m.role,
+    content: typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content : String(m.content ?? ""),
+  }));
 }
 
-// ---- Texto: IA gratuita en la nube (Groq / Pollinations) vía la función del backend ----
+async function streamInto(
+  prompt: any,
+  options: Record<string, unknown>,
+  onDelta: (s: string) => void,
+  signal?: AbortSignal,
+) {
+  const response = await puterChat(prompt, { stream: true, ...options });
+  if (response && typeof response[Symbol.asyncIterator] === "function") {
+    for await (const part of response as any) {
+      if (signal?.aborted) return;
+      const t = part?.text ?? part?.message?.content ?? "";
+      if (t) onDelta(String(t));
+    }
+    return;
+  }
+  const text = readPuterText(response);
+  if (text) onDelta(text);
+}
+
+// ---- Texto ----
 export async function streamChat(messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
-  return streamFromBody({ mode: "chat", messages, deviceId: getDeviceId() }, onDelta, signal);
+  return streamInto(toPuterMessages(messages), {}, onDelta, signal);
 }
 
 export async function streamSearch(query: string, messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
-  return streamFromBody({ mode: "web-search", query, messages, deviceId: getDeviceId() }, onDelta, signal);
+  const msgs = toPuterMessages(messages);
+  msgs.unshift({
+    role: "system",
+    content:
+      "Responde como buscador web: da información actual, concreta y verificable sobre la consulta del usuario. Si no estás seguro de un dato reciente, dilo con claridad.",
+  });
+  msgs.push({ role: "user", content: `Busca y resume información sobre: ${query}` });
+  return streamInto(msgs, {}, onDelta, signal);
 }
 
 export async function streamDebugVisual(imageUrl: string, notes: string, onDelta: (s: string) => void, signal?: AbortSignal) {
-  return streamFromBody({ mode: "debug-visual", imageUrl, notes, deviceId: getDeviceId() }, onDelta, signal);
+  const puter = await loadPuter();
+  const prompt = `Analiza esta captura de pantalla y detecta errores o problemas de interfaz. Notas del usuario: ${notes || "(sin notas)"}`;
+  const response = await puter.ai.chat(prompt, imageUrl, { model: PUTER_MODELS.vision, stream: true });
+  if (response && typeof response[Symbol.asyncIterator] === "function") {
+    for await (const part of response as any) {
+      if (signal?.aborted) return;
+      const t = part?.text ?? "";
+      if (t) onDelta(String(t));
+    }
+    return;
+  }
+  const text = readPuterText(response);
+  if (text) onDelta(text);
 }
 
-
-
-
+// ---- Imágenes ----
 export async function generateImage(prompt: string): Promise<string> {
-  const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ mode: "image", prompt, deviceId: getDeviceId() }) });
-  const text = await r.text();
-  let d: any = {};
-  try { d = JSON.parse(text); } catch { throw new Error("El generador devolvió una respuesta inválida. Intenta de nuevo."); }
-  if (!r.ok) throw new Error(d.message || d.error || `HTTP ${r.status}`);
-  if (!d.imageUrl) throw new Error(d.message || d.error || "El proveedor público no pudo generar la imagen ahora mismo.");
-  return d.imageUrl;
+  const puter = await loadPuter();
+  const image: any = await puter.ai.txt2img(prompt);
+  const url = typeof image === "string" ? image : image?.src || image?.url;
+  if (!url) throw new Error("El generador no devolvió ninguna imagen. Intenta de nuevo.");
+  return url;
 }
 
 export function fileToDataUrl(file: File): Promise<string> {
@@ -114,43 +92,58 @@ function parseJsonLoose(raw: string): any {
   const s = raw.indexOf("{");
   const e = raw.lastIndexOf("}");
   if (s === -1 || e <= s) return {};
-  try { return JSON.parse(raw.slice(s, e + 1)); } catch { return {}; }
+  try {
+    return JSON.parse(raw.slice(s, e + 1));
+  } catch {
+    return {};
+  }
 }
 
-async function postJson(body: Record<string, unknown>) {
-  const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
+async function askJson(prompt: string): Promise<any> {
+  const response = await puterChat(prompt, { model: PUTER_MODELS.fast });
+  return parseJsonLoose(readPuterText(response));
 }
 
-// Memoria: extrae hechos con la IA en la nube y los guarda
+// Memoria: extrae hechos con la IA y los guarda
 export async function extractAndStoreMemory(text: string) {
   if (!text || text.length < 8) return;
   try {
-    const out: any = await postJson({ mode: "extract-memory", text, deviceId: getDeviceId() });
+    const out = await askJson(
+      `Extrae hechos duraderos sobre el usuario del siguiente texto. Devuelve SOLO JSON con esta forma: {"facts":[{"content":"...","kind":"fact"}]}. Si no hay hechos, devuelve {"facts":[]}.\n\nTexto:\n${text}`,
+    );
     const facts = out?.facts;
     if (!Array.isArray(facts) || facts.length === 0) return;
     const did = getDeviceId();
     await supabase.from("user_memory" as any).insert(
-      facts.filter((f: any) => f?.content).map((f: any) => ({ device_id: did, content: String(f.content), kind: f.kind || "fact" })),
+      facts
+        .filter((f: any) => f?.content)
+        .map((f: any) => ({ device_id: did, content: String(f.content), kind: f.kind || "fact" })),
     );
-  } catch (e) { console.warn("memory extract failed", e); }
+  } catch (e) {
+    console.warn("memory extract failed", e);
+  }
 }
 
 export async function classifyNote(title: string, content: string) {
   try {
-    return await postJson({ mode: "classify-note", title, content, deviceId: getDeviceId() });
+    return await askJson(
+      `Clasifica esta nota. Devuelve SOLO JSON: {"category":"...","tags":["..."],"summary":"..."}.\n\nTítulo: ${title}\nContenido: ${content}`,
+    );
   } catch {
     return {};
   }
 }
 
 export async function analyzeProject(notes: any[]): Promise<string> {
-  const out: any = await postJson({ mode: "analyze-project", notes, deviceId: getDeviceId() });
-  return String(out?.analysis || "");
+  const resumen = notes
+    .map((n: any) => `- ${n?.title || "(sin título)"}: ${String(n?.content || "").slice(0, 400)}`)
+    .join("\n")
+    .slice(0, 8000);
+  const response = await puterChat(
+    `Analiza este conjunto de notas de un proyecto y entrega un análisis claro con puntos fuertes, riesgos y próximos pasos.\n\n${resumen}`,
+  );
+  return readPuterText(response);
 }
-
-
 
 export type DiagnosticsResult = {
   timestamp: string;
@@ -160,10 +153,19 @@ export type DiagnosticsResult = {
 
 export async function runDiagnostics(): Promise<DiagnosticsResult> {
   const t0 = performance.now();
-  const r = await fetch(FN_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ mode: "diagnose" }) });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const data = await r.json();
-  (data as any).roundTripMs = Math.round(performance.now() - t0);
-  return data;
+  let ok = false;
+  let sample = "";
+  let error: string | null = null;
+  try {
+    const response = await puterChat("Responde solo: ok", { model: PUTER_MODELS.fast });
+    sample = readPuterText(response).slice(0, 120);
+    ok = Boolean(sample);
+  } catch (e) {
+    error = String(e);
+  }
+  return {
+    timestamp: new Date().toISOString(),
+    env: { puter: typeof (globalThis as any).puter !== "undefined" },
+    results: { puter: { ok, ms: Math.round(performance.now() - t0), sample, error } },
+  };
 }
-
