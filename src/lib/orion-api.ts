@@ -1,7 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { loadPuter, puterChat, readPuterText, PUTER_MODELS } from "@/lib/puter";
-import { buildSystemPrompt, invalidateOrionContext } from "@/lib/orion-context";
 
 export type ChatMsg = { role: "user" | "assistant" | "system"; content: any };
 
@@ -33,16 +32,11 @@ async function streamInto(
 
 // ---- Texto ----
 export async function streamChat(messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
-  const msgs = toPuterMessages(messages);
-  const system = await buildSystemPrompt().catch(() => "");
-  if (system) msgs.unshift({ role: "system", content: system });
-  return streamInto(msgs, {}, onDelta, signal);
+  return streamInto(toPuterMessages(messages), {}, onDelta, signal);
 }
 
 export async function streamSearch(query: string, messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
   const msgs = toPuterMessages(messages);
-  const system = await buildSystemPrompt().catch(() => "");
-  if (system) msgs.unshift({ role: "system", content: system });
   msgs.unshift({
     role: "system",
     content:
@@ -120,20 +114,11 @@ export async function extractAndStoreMemory(text: string) {
     const facts = out?.facts;
     if (!Array.isArray(facts) || facts.length === 0) return;
     const did = getDeviceId();
-    const { data: userRes } = await supabase.auth.getUser();
-    const uid = userRes?.user?.id ?? null;
-    const { data: existing } = await supabase
-      .from("user_memory" as any)
-      .select("content")
-      .eq("device_id", did)
-      .limit(200);
-    const known = new Set(((existing as any[]) || []).map((r) => String(r.content || "").trim().toLowerCase()));
-    const rows = facts
-      .filter((f: any) => f?.content && !known.has(String(f.content).trim().toLowerCase()))
-      .map((f: any) => ({ device_id: did, user_id: uid, content: String(f.content), kind: f.kind || "fact" }));
-    if (!rows.length) return;
-    await supabase.from("user_memory" as any).insert(rows);
-    invalidateOrionContext();
+    await supabase.from("user_memory" as any).insert(
+      facts
+        .filter((f: any) => f?.content)
+        .map((f: any) => ({ device_id: did, content: String(f.content), kind: f.kind || "fact" })),
+    );
   } catch (e) {
     console.warn("memory extract failed", e);
   }
