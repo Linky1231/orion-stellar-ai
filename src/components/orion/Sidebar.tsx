@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/localdb";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
 import { Search, Plus, Trash2, Pencil, MessageSquare, StickyNote, X, ImagePlus, Bug, LogOut } from "lucide-react";

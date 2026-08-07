@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/localdb";
 import { getDeviceId } from "@/lib/device";
 import { loadPuter, puterChat, readPuterText, PUTER_MODELS } from "@/lib/puter";
 

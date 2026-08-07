@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, createContext, useContext, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/localdb";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
 import { streamChat, streamSearch, generateImage, uploadAttachment, extractAndStoreMemory, type ChatMsg } from "@/lib/orion-api";
