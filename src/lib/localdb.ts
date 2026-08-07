@@ -223,7 +223,7 @@ export const localDb = {
   storage: {
     from(_bucket: string) {
       return {
-        async upload(path: string, file: File) {
+        async upload(path: string, file: File, _opts?: any) {
           const url = await fileToDataUrl(file);
           memFiles[path] = url;
           try {
@@ -244,7 +244,7 @@ export const localDb = {
   channel(_name: string) {
     const entry: { table?: string; fn: Listener } = { fn: () => {} };
     const api = {
-      on(_event: string, opts: { table?: string }, fn: Listener) {
+      on(_event: string, opts: { table?: string; [k: string]: any }, fn: Listener) {
         entry.table = opts?.table;
         entry.fn = fn;
         return api;
