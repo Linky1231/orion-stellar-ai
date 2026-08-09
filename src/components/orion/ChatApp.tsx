@@ -179,23 +179,27 @@ export function ChatApp() {
   function newConv() { setConvId(null); setMessages([]); setSidebarOpen(false); }
 
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const getSynth = () =>
+    (typeof window !== "undefined" && "speechSynthesis" in window ? window.speechSynthesis : null);
   const toggleSpeak = useCallback((id: string, text: string) => {
     sfx.tap();
+    const synth = getSynth();
+    if (!synth || typeof SpeechSynthesisUtterance === "undefined") return;
     if (speakingId === id) {
-      window.speechSynthesis.cancel();
+      synth.cancel();
       setSpeakingId(null);
       return;
     }
-    window.speechSynthesis.cancel();
+    synth.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "es-ES";
     u.onend = () => setSpeakingId((cur) => (cur === id ? null : cur));
     u.onerror = () => setSpeakingId((cur) => (cur === id ? null : cur));
-    window.speechSynthesis.speak(u);
+    synth.speak(u);
     setSpeakingId(id);
   }, [speakingId]);
 
-  useEffect(() => () => window.speechSynthesis.cancel(), []);
+  useEffect(() => () => { getSynth()?.cancel(); }, []);
 
   return (
     <SpeechCtx.Provider value={{ speakingId, toggle: toggleSpeak }}>
