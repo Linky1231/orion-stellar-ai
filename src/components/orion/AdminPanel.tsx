@@ -118,6 +118,7 @@ export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => vo
         </div>
         <div className="px-5 pt-3 flex gap-2 flex-wrap">
           {[
+            ["saldo", "Saldo API"],
             ["config", "Comportamiento"],
             ["kb", "Conocimiento"],
             ["refs", "Imágenes"],
@@ -132,7 +133,9 @@ export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => vo
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
-          {tab === "config" && cfg && (
+          {tab === "saldo" && <BalancePanel />}
+
+
             <div className="space-y-4">
               {(["context", "personality", "behavior"] as const).map((k) => (
                 <div key={k}>
