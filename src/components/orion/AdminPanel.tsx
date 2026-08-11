@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sfx } from "@/lib/sounds";
 import { uploadAttachment } from "@/lib/orion-api";
+import { BalancePanel } from "./BalancePanel";
 import { X, Plus, Trash2, Save, Upload, Image as ImageIcon, Pencil, Code2 } from "lucide-react";
 
 type KB = { id: string; title: string; content: string };
@@ -9,7 +10,8 @@ type Ref = { id: string; name: string; url: string; description: string };
 type Builda = { id: string; title: string; description: string | null; code: string };
 
 export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [tab, setTab] = useState<"config" | "kb" | "refs" | "builda">("config");
+  const [tab, setTab] = useState<"saldo" | "config" | "kb" | "refs" | "builda">("saldo");
+
   const [cfg, setCfg] = useState<any>(null);
   const [kb, setKb] = useState<KB[]>([]);
   const [refs, setRefs] = useState<Ref[]>([]);
@@ -116,6 +118,7 @@ export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => vo
         </div>
         <div className="px-5 pt-3 flex gap-2 flex-wrap">
           {[
+            ["saldo", "Saldo API"],
             ["config", "Comportamiento"],
             ["kb", "Conocimiento"],
             ["refs", "Imágenes"],
@@ -130,8 +133,11 @@ export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => vo
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
+          {tab === "saldo" && <BalancePanel />}
+
           {tab === "config" && cfg && (
             <div className="space-y-4">
+
               {(["context", "personality", "behavior"] as const).map((k) => (
                 <div key={k}>
                   <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">{k}</div>

@@ -10,33 +10,63 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiYbUsageRouteImport } from './routes/api/yb/usage'
+import { Route as ApiYbImageRouteImport } from './routes/api/yb/image'
+import { Route as ApiYbChatRouteImport } from './routes/api/yb/chat'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiYbUsageRoute = ApiYbUsageRouteImport.update({
+  id: '/api/yb/usage',
+  path: '/api/yb/usage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiYbImageRoute = ApiYbImageRouteImport.update({
+  id: '/api/yb/image',
+  path: '/api/yb/image',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiYbChatRoute = ApiYbChatRouteImport.update({
+  id: '/api/yb/chat',
+  path: '/api/yb/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/yb/chat': typeof ApiYbChatRoute
+  '/api/yb/image': typeof ApiYbImageRoute
+  '/api/yb/usage': typeof ApiYbUsageRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/yb/chat': typeof ApiYbChatRoute
+  '/api/yb/image': typeof ApiYbImageRoute
+  '/api/yb/usage': typeof ApiYbUsageRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/yb/chat': typeof ApiYbChatRoute
+  '/api/yb/image': typeof ApiYbImageRoute
+  '/api/yb/usage': typeof ApiYbUsageRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/api/yb/chat' | '/api/yb/image' | '/api/yb/usage'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/api/yb/chat' | '/api/yb/image' | '/api/yb/usage'
+  id: '__root__' | '/' | '/api/yb/chat' | '/api/yb/image' | '/api/yb/usage'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiYbChatRoute: typeof ApiYbChatRoute
+  ApiYbImageRoute: typeof ApiYbImageRoute
+  ApiYbUsageRoute: typeof ApiYbUsageRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,22 +78,36 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/yb/usage': {
+      id: '/api/yb/usage'
+      path: '/api/yb/usage'
+      fullPath: '/api/yb/usage'
+      preLoaderRoute: typeof ApiYbUsageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/yb/image': {
+      id: '/api/yb/image'
+      path: '/api/yb/image'
+      fullPath: '/api/yb/image'
+      preLoaderRoute: typeof ApiYbImageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/yb/chat': {
+      id: '/api/yb/chat'
+      path: '/api/yb/chat'
+      fullPath: '/api/yb/chat'
+      preLoaderRoute: typeof ApiYbChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiYbChatRoute: ApiYbChatRoute,
+  ApiYbImageRoute: ApiYbImageRoute,
+  ApiYbUsageRoute: ApiYbUsageRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
