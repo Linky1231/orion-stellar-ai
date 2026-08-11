@@ -135,8 +135,9 @@ export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => vo
         <div className="flex-1 overflow-y-auto p-5">
           {tab === "saldo" && <BalancePanel />}
 
-
+          {tab === "config" && cfg && (
             <div className="space-y-4">
+
               {(["context", "personality", "behavior"] as const).map((k) => (
                 <div key={k}>
                   <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">{k}</div>
