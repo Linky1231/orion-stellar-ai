@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiYbUsageRouteImport } from './routes/api/yb/usage'
 import { Route as ApiYbImageRouteImport } from './routes/api/yb/image'
 import { Route as ApiYbChatRouteImport } from './routes/api/yb/chat'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiYbUsageRoute = ApiYbUsageRouteImport.update({
+  id: '/api/yb/usage',
+  path: '/api/yb/usage',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiYbImageRoute = ApiYbImageRouteImport.update({
@@ -33,30 +39,34 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/yb/chat': typeof ApiYbChatRoute
   '/api/yb/image': typeof ApiYbImageRoute
+  '/api/yb/usage': typeof ApiYbUsageRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/yb/chat': typeof ApiYbChatRoute
   '/api/yb/image': typeof ApiYbImageRoute
+  '/api/yb/usage': typeof ApiYbUsageRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/yb/chat': typeof ApiYbChatRoute
   '/api/yb/image': typeof ApiYbImageRoute
+  '/api/yb/usage': typeof ApiYbUsageRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/yb/chat' | '/api/yb/image'
+  fullPaths: '/' | '/api/yb/chat' | '/api/yb/image' | '/api/yb/usage'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/yb/chat' | '/api/yb/image'
-  id: '__root__' | '/' | '/api/yb/chat' | '/api/yb/image'
+  to: '/' | '/api/yb/chat' | '/api/yb/image' | '/api/yb/usage'
+  id: '__root__' | '/' | '/api/yb/chat' | '/api/yb/image' | '/api/yb/usage'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiYbChatRoute: typeof ApiYbChatRoute
   ApiYbImageRoute: typeof ApiYbImageRoute
+  ApiYbUsageRoute: typeof ApiYbUsageRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -66,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/yb/usage': {
+      id: '/api/yb/usage'
+      path: '/api/yb/usage'
+      fullPath: '/api/yb/usage'
+      preLoaderRoute: typeof ApiYbUsageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/yb/image': {
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiYbChatRoute: ApiYbChatRoute,
   ApiYbImageRoute: ApiYbImageRoute,
+  ApiYbUsageRoute: ApiYbUsageRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

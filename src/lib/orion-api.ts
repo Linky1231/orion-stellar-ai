@@ -1,74 +1,46 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
-import { loadPuter, puterChat, readPuterText, PUTER_MODELS } from "@/lib/puter";
+import { ybStream, ybText, ybImage, ybUsage, YB_MODEL } from "@/lib/yb";
 
 export type ChatMsg = { role: "user" | "assistant" | "system"; content: any };
 
-function toPuterMessages(messages: ChatMsg[]) {
-  return messages.map((m) => ({
-    role: m.role,
-    content: typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content : String(m.content ?? ""),
-  }));
-}
-
-async function streamInto(
-  prompt: any,
-  options: Record<string, unknown>,
-  onDelta: (s: string) => void,
-  signal?: AbortSignal,
-) {
-  const response = await puterChat(prompt, { stream: true, ...options });
-  if (response && typeof response[Symbol.asyncIterator] === "function") {
-    for await (const part of response as any) {
-      if (signal?.aborted) return;
-      const t = part?.text ?? part?.message?.content ?? "";
-      if (t) onDelta(String(t));
-    }
-    return;
-  }
-  const text = readPuterText(response);
-  if (text) onDelta(text);
-}
-
 // ---- Texto ----
 export async function streamChat(messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
-  return streamInto(toPuterMessages(messages), {}, onDelta, signal);
+  return ybStream(messages, onDelta, signal);
 }
 
 export async function streamSearch(query: string, messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
-  const msgs = toPuterMessages(messages);
-  msgs.unshift({
-    role: "system",
-    content:
-      "Responde como buscador web: da información actual, concreta y verificable sobre la consulta del usuario. Si no estás seguro de un dato reciente, dilo con claridad.",
-  });
-  msgs.push({ role: "user", content: `Busca y resume información sobre: ${query}` });
-  return streamInto(msgs, {}, onDelta, signal);
+  const msgs: ChatMsg[] = [
+    {
+      role: "system",
+      content:
+        "Responde como buscador web: da información actual, concreta y verificable sobre la consulta del usuario. Si no estás seguro de un dato reciente, dilo con claridad.",
+    },
+    ...messages,
+    { role: "user", content: `Busca y resume información sobre: ${query}` },
+  ];
+  return ybStream(msgs, onDelta, signal);
 }
 
 export async function streamDebugVisual(imageUrl: string, notes: string, onDelta: (s: string) => void, signal?: AbortSignal) {
-  const puter = await loadPuter();
-  const prompt = `Analiza esta captura de pantalla y detecta errores o problemas de interfaz. Notas del usuario: ${notes || "(sin notas)"}`;
-  const response = await puter.ai.chat(prompt, imageUrl, { model: PUTER_MODELS.vision, stream: true });
-  if (response && typeof response[Symbol.asyncIterator] === "function") {
-    for await (const part of response as any) {
-      if (signal?.aborted) return;
-      const t = part?.text ?? "";
-      if (t) onDelta(String(t));
-    }
-    return;
-  }
-  const text = readPuterText(response);
-  if (text) onDelta(text);
+  const msgs: ChatMsg[] = [
+    {
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: `Analiza esta captura de pantalla y detecta errores o problemas de interfaz. Notas del usuario: ${notes || "(sin notas)"}`,
+        },
+        { type: "image_url", image_url: { url: imageUrl } },
+      ],
+    },
+  ];
+  return ybStream(msgs, onDelta, signal);
 }
 
 // ---- Imágenes ----
 export async function generateImage(prompt: string): Promise<string> {
-  const puter = await loadPuter();
-  const image: any = await puter.ai.txt2img(prompt);
-  const url = typeof image === "string" ? image : image?.src || image?.url;
-  if (!url) throw new Error("El generador no devolvió ninguna imagen. Intenta de nuevo.");
-  return url;
+  return ybImage(prompt);
 }
 
 export function fileToDataUrl(file: File): Promise<string> {
@@ -100,8 +72,8 @@ function parseJsonLoose(raw: string): any {
 }
 
 async function askJson(prompt: string): Promise<any> {
-  const response = await puterChat(prompt, { model: PUTER_MODELS.fast });
-  return parseJsonLoose(readPuterText(response));
+  const text = await ybText([{ role: "user", content: prompt }], { max_tokens: 600 });
+  return parseJsonLoose(text);
 }
 
 // Memoria: extrae hechos con la IA y los guarda
@@ -139,10 +111,15 @@ export async function analyzeProject(notes: any[]): Promise<string> {
     .map((n: any) => `- ${n?.title || "(sin título)"}: ${String(n?.content || "").slice(0, 400)}`)
     .join("\n")
     .slice(0, 8000);
-  const response = await puterChat(
-    `Analiza este conjunto de notas de un proyecto y entrega un análisis claro con puntos fuertes, riesgos y próximos pasos.\n\n${resumen}`,
+  return ybText(
+    [
+      {
+        role: "user",
+        content: `Analiza este conjunto de notas de un proyecto y entrega un análisis claro con puntos fuertes, riesgos y próximos pasos.\n\n${resumen}`,
+      },
+    ],
+    { max_tokens: 1500 },
   );
-  return readPuterText(response);
 }
 
 export type DiagnosticsResult = {
@@ -157,15 +134,22 @@ export async function runDiagnostics(): Promise<DiagnosticsResult> {
   let sample = "";
   let error: string | null = null;
   try {
-    const response = await puterChat("Responde solo: ok", { model: PUTER_MODELS.fast });
-    sample = readPuterText(response).slice(0, 120);
+    sample = (await ybText([{ role: "user", content: "Responde solo: ok" }], { max_tokens: 20 })).slice(0, 120);
     ok = Boolean(sample);
   } catch (e) {
     error = String(e);
   }
+
+  let saldo = false;
+  try {
+    saldo = (await ybUsage()).balanceUsd >= 0;
+  } catch {
+    saldo = false;
+  }
+
   return {
     timestamp: new Date().toISOString(),
-    env: { puter: typeof (globalThis as any).puter !== "undefined" },
-    results: { puter: { ok, ms: Math.round(performance.now() - t0), sample, error } },
+    env: { yieldingbear: true, saldo },
+    results: { [YB_MODEL]: { ok, ms: Math.round(performance.now() - t0), sample, error } },
   };
 }
