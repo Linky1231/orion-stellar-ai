@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sfx } from "@/lib/sounds";
 import { uploadAttachment } from "@/lib/orion-api";
+import { BalancePanel } from "./BalancePanel";
 import { X, Plus, Trash2, Save, Upload, Image as ImageIcon, Pencil, Code2 } from "lucide-react";
 
 type KB = { id: string; title: string; content: string };
@@ -9,7 +10,8 @@ type Ref = { id: string; name: string; url: string; description: string };
 type Builda = { id: string; title: string; description: string | null; code: string };
 
 export function AdminPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [tab, setTab] = useState<"config" | "kb" | "refs" | "builda">("config");
+  const [tab, setTab] = useState<"saldo" | "config" | "kb" | "refs" | "builda">("saldo");
+
   const [cfg, setCfg] = useState<any>(null);
   const [kb, setKb] = useState<KB[]>([]);
   const [refs, setRefs] = useState<Ref[]>([]);
