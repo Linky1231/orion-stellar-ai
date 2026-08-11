@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/localdb";
+import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
 import { classifyNote, analyzeProject } from "@/lib/orion-api";

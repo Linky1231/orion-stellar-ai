@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/localdb";
+import { supabase } from "@/integrations/supabase/client";
 import { sfx } from "@/lib/sounds";
 import { uploadAttachment } from "@/lib/orion-api";
 import { X, Plus, Trash2, Save, Upload, Image as ImageIcon, Pencil, Code2 } from "lucide-react";

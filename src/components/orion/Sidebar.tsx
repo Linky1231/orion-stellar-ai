@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/localdb";
+import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
-import { Search, Plus, Trash2, Pencil, MessageSquare, StickyNote, X, ImagePlus, Bug } from "lucide-react";
+import { Search, Plus, Trash2, Pencil, MessageSquare, StickyNote, X, ImagePlus, Bug, LogOut } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 import { OrionLogo } from "./OrionLogo";
 
 type Conv = { id: string; title: string; updated_at: string };
@@ -182,8 +183,37 @@ export function Sidebar({
             </div>
           ))}
         </div>
+        <ProfileFooter />
       </aside>
     </>
   );
 }
 
+function ProfileFooter() {
+  const { user, profile, signOut } = useAuth();
+  if (!user) return null;
+  const name = profile?.display_name || user.email?.split("@")[0] || "Cuenta";
+  const initial = name.charAt(0).toUpperCase();
+  return (
+    <div className="mt-auto border-t border-border p-3 flex items-center gap-3">
+      {profile?.avatar_url ? (
+        <img src={profile.avatar_url} alt={name} className="w-9 h-9 rounded-full object-cover" />
+      ) : (
+        <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-semibold">
+          {initial}
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="text-sm truncate">{name}</div>
+        <div className="text-[10px] text-muted-foreground truncate">{user.email}</div>
+      </div>
+      <button
+        title="Cerrar sesión"
+        onClick={() => { sfx.tap(); void signOut(); }}
+        className="tap p-2 rounded-lg hover:bg-accent transition-transform active:scale-95"
+      >
+        <LogOut className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, createContext, useContext, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
-import { supabase } from "@/lib/localdb";
+import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { sfx } from "@/lib/sounds";
 import { streamChat, streamSearch, generateImage, uploadAttachment, extractAndStoreMemory, type ChatMsg } from "@/lib/orion-api";
@@ -179,27 +179,23 @@ export function ChatApp() {
   function newConv() { setConvId(null); setMessages([]); setSidebarOpen(false); }
 
   const [speakingId, setSpeakingId] = useState<string | null>(null);
-  const getSynth = () =>
-    (typeof window !== "undefined" && "speechSynthesis" in window ? window.speechSynthesis : null);
   const toggleSpeak = useCallback((id: string, text: string) => {
     sfx.tap();
-    const synth = getSynth();
-    if (!synth || typeof SpeechSynthesisUtterance === "undefined") return;
     if (speakingId === id) {
-      synth.cancel();
+      window.speechSynthesis.cancel();
       setSpeakingId(null);
       return;
     }
-    synth.cancel();
+    window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "es-ES";
     u.onend = () => setSpeakingId((cur) => (cur === id ? null : cur));
     u.onerror = () => setSpeakingId((cur) => (cur === id ? null : cur));
-    synth.speak(u);
+    window.speechSynthesis.speak(u);
     setSpeakingId(id);
   }, [speakingId]);
 
-  useEffect(() => () => { getSynth()?.cancel(); }, []);
+  useEffect(() => () => window.speechSynthesis.cancel(), []);
 
   return (
     <SpeechCtx.Provider value={{ speakingId, toggle: toggleSpeak }}>
