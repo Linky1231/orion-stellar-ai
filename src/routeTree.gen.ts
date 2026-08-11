@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiYbImageRouteImport } from './routes/api/yb/image'
 import { Route as ApiYbChatRouteImport } from './routes/api/yb/chat'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiYbImageRoute = ApiYbImageRouteImport.update({
+  id: '/api/yb/image',
+  path: '/api/yb/image',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiYbChatRoute = ApiYbChatRouteImport.update({
@@ -26,27 +32,31 @@ const ApiYbChatRoute = ApiYbChatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/yb/chat': typeof ApiYbChatRoute
+  '/api/yb/image': typeof ApiYbImageRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/yb/chat': typeof ApiYbChatRoute
+  '/api/yb/image': typeof ApiYbImageRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/yb/chat': typeof ApiYbChatRoute
+  '/api/yb/image': typeof ApiYbImageRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/yb/chat'
+  fullPaths: '/' | '/api/yb/chat' | '/api/yb/image'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/yb/chat'
-  id: '__root__' | '/' | '/api/yb/chat'
+  to: '/' | '/api/yb/chat' | '/api/yb/image'
+  id: '__root__' | '/' | '/api/yb/chat' | '/api/yb/image'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiYbChatRoute: typeof ApiYbChatRoute
+  ApiYbImageRoute: typeof ApiYbImageRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/yb/image': {
+      id: '/api/yb/image'
+      path: '/api/yb/image'
+      fullPath: '/api/yb/image'
+      preLoaderRoute: typeof ApiYbImageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/yb/chat': {
@@ -71,17 +88,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiYbChatRoute: ApiYbChatRoute,
+  ApiYbImageRoute: ApiYbImageRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
