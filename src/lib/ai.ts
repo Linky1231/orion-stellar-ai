@@ -15,7 +15,7 @@ export async function aiStream(
     body: JSON.stringify({
       model: opts.model || AI_MODEL,
       stream: true,
-      max_tokens: opts.max_tokens ?? 1024,
+      max_tokens: opts.max_tokens ?? 8192,
       messages,
     }),
     signal,
