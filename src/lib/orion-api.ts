@@ -1,12 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
-import { ybStream, ybText, ybImage, ybUsage, YB_MODEL } from "@/lib/yb";
+import { aiStream, aiText, aiImage, AI_MODEL } from "@/lib/ai";
 
 export type ChatMsg = { role: "user" | "assistant" | "system"; content: any };
 
 // ---- Texto ----
 export async function streamChat(messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
-  return ybStream(messages, onDelta, signal);
+  return aiStream(messages, onDelta, signal);
 }
 
 export async function streamSearch(query: string, messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
@@ -19,7 +19,7 @@ export async function streamSearch(query: string, messages: ChatMsg[], onDelta: 
     ...messages,
     { role: "user", content: `Busca y resume información sobre: ${query}` },
   ];
-  return ybStream(msgs, onDelta, signal);
+  return aiStream(msgs, onDelta, signal);
 }
 
 export async function streamDebugVisual(imageUrl: string, notes: string, onDelta: (s: string) => void, signal?: AbortSignal) {
@@ -35,12 +35,12 @@ export async function streamDebugVisual(imageUrl: string, notes: string, onDelta
       ],
     },
   ];
-  return ybStream(msgs, onDelta, signal);
+  return aiStream(msgs, onDelta, signal);
 }
 
 // ---- Imágenes ----
 export async function generateImage(prompt: string): Promise<string> {
-  return ybImage(prompt);
+  return aiImage(prompt);
 }
 
 export function fileToDataUrl(file: File): Promise<string> {
@@ -72,7 +72,7 @@ function parseJsonLoose(raw: string): any {
 }
 
 async function askJson(prompt: string): Promise<any> {
-  const text = await ybText([{ role: "user", content: prompt }], { max_tokens: 600 });
+  const text = await aiText([{ role: "user", content: prompt }], { max_tokens: 600 });
   return parseJsonLoose(text);
 }
 
@@ -111,7 +111,7 @@ export async function analyzeProject(notes: any[]): Promise<string> {
     .map((n: any) => `- ${n?.title || "(sin título)"}: ${String(n?.content || "").slice(0, 400)}`)
     .join("\n")
     .slice(0, 8000);
-  return ybText(
+  return aiText(
     [
       {
         role: "user",
@@ -134,22 +134,15 @@ export async function runDiagnostics(): Promise<DiagnosticsResult> {
   let sample = "";
   let error: string | null = null;
   try {
-    sample = (await ybText([{ role: "user", content: "Responde solo: ok" }], { max_tokens: 20 })).slice(0, 120);
+    sample = (await aiText([{ role: "user", content: "Responde solo: ok" }], { max_tokens: 20 })).slice(0, 120);
     ok = Boolean(sample);
   } catch (e) {
     error = String(e);
   }
 
-  let saldo = false;
-  try {
-    saldo = (await ybUsage()).balanceUsd >= 0;
-  } catch {
-    saldo = false;
-  }
-
   return {
     timestamp: new Date().toISOString(),
-    env: { yieldingbear: true, saldo },
-    results: { [YB_MODEL]: { ok, ms: Math.round(performance.now() - t0), sample, error } },
+    env: { lovableAi: true },
+    results: { [AI_MODEL]: { ok, ms: Math.round(performance.now() - t0), sample, error } },
   };
 }
