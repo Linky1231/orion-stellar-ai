@@ -4,13 +4,48 @@ import { aiStream, aiText, aiImage, AI_MODEL } from "@/lib/ai";
 
 export type ChatMsg = { role: "user" | "assistant" | "system"; content: any };
 
+// ---- Conocimiento (memoria) ----
+async function buildKnowledgeMessages(): Promise<ChatMsg[]> {
+  const out: ChatMsg[] = [];
+  try {
+    const [kb, mem] = await Promise.all([
+      supabase.from("orion_knowledge").select("title,content").order("created_at", { ascending: true }),
+      supabase.from("user_memory" as any).select("content").eq("device_id", getDeviceId()).order("created_at", { ascending: true }),
+    ]);
+    const entries = (kb.data || []) as { title: string; content: string }[];
+    if (entries.length) {
+      out.push({
+        role: "system",
+        content:
+          "BASE DE CONOCIMIENTO DE ORIÓN (usa SIEMPRE esta información como verdad y respóndela cuando sea relevante; son " +
+          entries.length +
+          " entradas completas):\n\n" +
+          entries.map((e, i) => `#${i + 1} ${e.title}\n${e.content}`).join("\n\n---\n\n"),
+      });
+    }
+    const facts = ((mem.data || []) as any[]).map((m) => String(m.content)).filter(Boolean);
+    if (facts.length) {
+      out.push({
+        role: "system",
+        content: "MEMORIA DEL USUARIO (hechos recordados):\n" + facts.map((f) => `- ${f}`).join("\n"),
+      });
+    }
+  } catch (e) {
+    console.warn("knowledge load failed", e);
+  }
+  return out;
+}
+
 // ---- Texto ----
 export async function streamChat(messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
-  return aiStream(messages, onDelta, signal);
+  const ctx = await buildKnowledgeMessages();
+  return aiStream([...ctx, ...messages], onDelta, signal);
 }
 
 export async function streamSearch(query: string, messages: ChatMsg[], onDelta: (s: string) => void, signal?: AbortSignal) {
+  const ctx = await buildKnowledgeMessages();
   const msgs: ChatMsg[] = [
+    ...ctx,
     {
       role: "system",
       content:
@@ -21,6 +56,7 @@ export async function streamSearch(query: string, messages: ChatMsg[], onDelta: 
   ];
   return aiStream(msgs, onDelta, signal);
 }
+
 
 export async function streamDebugVisual(imageUrl: string, notes: string, onDelta: (s: string) => void, signal?: AbortSignal) {
   const msgs: ChatMsg[] = [
