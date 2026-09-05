@@ -103,7 +103,13 @@ export function ChatApp() {
       const tempId = "img-" + Date.now();
       setMessages((m) => [...m, { id: tempId, conversation_id: id, role: "assistant", content: "Preparando imagen…", attachments: [], created_at: new Date().toISOString() }]);
       try {
-        const url = await generateImage(text);
+        const raw = await generateImage(text);
+        let url = raw;
+        if (raw.startsWith("data:")) {
+          const blob = await (await fetch(raw)).blob();
+          url = await uploadAttachment(new File([blob], `orion-${Date.now()}.png`, { type: blob.type || "image/png" }));
+        }
+
         const { data: a } = await supabase.from("messages").insert({
           conversation_id: id, role: "assistant",
           content: `Aquí tienes tu imagen`,
@@ -174,11 +180,13 @@ export function ChatApp() {
 
   async function onFile(f: File) {
     sfx.tap();
+    if (f.size > 25 * 1024 * 1024) { sfx.error(); alert("El archivo es muy grande (máx. 25 MB)."); return; }
     try {
       const url = await uploadAttachment(f);
       setPending((p) => [...p, { url, type: f.type, name: f.name }]);
     } catch (e: any) { sfx.error(); alert(e.message); }
   }
+
 
   function newConv() { setConvId(null); setMessages([]); setSidebarOpen(false); }
 
