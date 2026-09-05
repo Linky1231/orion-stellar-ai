@@ -38,6 +38,8 @@ export function ChatApp() {
   const [imageMode, setImageMode] = useState(false);
   const [searchMode, setSearchMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }); }, [messages, streaming]);
 
