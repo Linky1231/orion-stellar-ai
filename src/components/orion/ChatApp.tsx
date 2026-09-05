@@ -263,7 +263,7 @@ export function ChatApp() {
               <div className="flex gap-2 mb-2 flex-wrap">
                 {pending.map((p, i) => (
                   <div key={i} className="relative bg-card border border-border rounded-xl p-1.5 pr-7 text-xs flex items-center gap-2">
-                    {p.type.startsWith("image") ? <img src={p.url} className="w-8 h-8 rounded object-cover" /> : <Paperclip className="w-4 h-4" />}
+                    {p.type.startsWith("image") ? <img src={p.url} className="w-8 h-8 rounded object-cover" /> : p.type.startsWith("video") ? <video src={p.url} className="w-8 h-8 rounded object-cover" muted /> : <Paperclip className="w-4 h-4" />}
                     <span className="max-w-[120px] truncate">{p.name}</span>
                     <button className="absolute right-1 top-1 p-0.5 hover:bg-accent rounded" onClick={() => setPending(pending.filter((_, j) => j !== i))}>
                       <X className="w-3 h-3" />
@@ -287,7 +287,23 @@ export function ChatApp() {
                 rows={1}
                 className="flex-1 bg-transparent outline-none resize-none px-3 py-2 text-sm max-h-40 placeholder:text-muted-foreground"
               />
+              <button onClick={() => { sfx.tap(); fileRef.current?.click(); }} className="tap btn-glass p-2 rounded-xl" title="Adjuntar imagen o video">
+                <Paperclip className="w-4 h-4" />
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  files.forEach((f) => onFile(f));
+                  e.target.value = "";
+                }}
+              />
               <button onClick={() => { sfx.tap(); setImageMode((v) => !v); if (!imageMode) setSearchMode(false); }} className={`tap p-2 rounded-xl ${imageMode ? "btn-cosmic" : "btn-glass"}`} title="Generar imagen">
+
                 <ImagePlus className="w-4 h-4" />
               </button>
               <button onClick={() => { sfx.tap(); setSearchMode((v) => !v); if (!searchMode) setImageMode(false); }} className={`tap p-2 rounded-xl ${searchMode ? "btn-cosmic" : "btn-glass"}`} title="Buscar info">
