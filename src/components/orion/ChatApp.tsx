@@ -372,9 +372,12 @@ function Bubble({ m }: { m: DBMsg }) {
         {(m.attachments || []).map((a: any, i) => (
           a.type?.startsWith("image") ? (
             <GeneratedImage key={i} src={a.url} />
+          ) : a.type?.startsWith("video") ? (
+            <video key={i} src={a.url} controls playsInline className="rounded-2xl max-h-80 border border-border shadow-soft" />
           ) : (
             <a key={i} href={a.url} target="_blank" className="text-xs underline">{a.name}</a>
           )
+
         ))}
         {m.content && (
           <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed
