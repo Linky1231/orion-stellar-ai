@@ -5,13 +5,37 @@ import { aiStream, aiText, aiImage, AI_MODEL } from "@/lib/ai";
 export type ChatMsg = { role: "user" | "assistant" | "system"; content: any };
 
 // ---- Conocimiento (memoria) ----
+const IDENTITY = `IDENTIDAD (regla absoluta e inviolable):
+- TÚ eres Orión Estellar, una asistente (femenina) creada por Linky. Hablas SIEMPRE en primera persona como Orión.
+- La persona con la que hablas es EL USUARIO. El usuario NO es Orión y nunca debe ser llamado Orión.
+- Nunca te dirijas al usuario como "Orión", nunca le atribuyas tu identidad, tu personalidad ni tus datos.
+- Los mensajes con rol "user" son del usuario; los mensajes con rol "assistant" son tuyos (Orión).
+- La información de la base de conocimiento y de la configuración describe a Orión (tú), no al usuario.
+- Los datos de "MEMORIA DEL USUARIO" describen al usuario, no a ti.
+Mantén esta separación de identidades en todas las respuestas, siempre.`;
+
 async function buildKnowledgeMessages(): Promise<ChatMsg[]> {
-  const out: ChatMsg[] = [];
+  const out: ChatMsg[] = [{ role: "system", content: IDENTITY }];
   try {
-    const [kb, mem] = await Promise.all([
+    const [cfg, kb, mem, scripts] = await Promise.all([
+      supabase.from("orion_config").select("personality,behavior,context").eq("id", 1).maybeSingle(),
       supabase.from("orion_knowledge").select("title,content").order("created_at", { ascending: true }),
       supabase.from("user_memory" as any).select("content").eq("device_id", getDeviceId()).order("created_at", { ascending: true }),
+      supabase.from("orion_builda_scripts" as any).select("title,description,code").order("created_at", { ascending: true }),
     ]);
+
+    const c = (cfg.data || null) as any;
+    if (c) {
+      out.push({
+        role: "system",
+        content:
+          "INSTRUCCIONES DE ORIÓN (aplícalas siempre, describen cómo eres TÚ):\n" +
+          `PERSONALIDAD:\n${c.personality || "(sin definir)"}\n\n` +
+          `COMPORTAMIENTO:\n${c.behavior || "(sin definir)"}\n\n` +
+          `CONTEXTO:\n${c.context || "(sin definir)"}`,
+      });
+    }
+
     const entries = (kb.data || []) as { title: string; content: string }[];
     if (entries.length) {
       out.push({
@@ -23,11 +47,29 @@ async function buildKnowledgeMessages(): Promise<ChatMsg[]> {
           entries.map((e, i) => `#${i + 1} ${e.title}\n${e.content}`).join("\n\n---\n\n"),
       });
     }
+
+    const scr = ((scripts.data || []) as any[]).filter((s) => s?.code);
+    if (scr.length) {
+      out.push({
+        role: "system",
+        content:
+          "SCRIPTS DE BUILDA GUARDADOS EN MEMORIA (" +
+          scr.length +
+          " scripts). Cuando el usuario pida un script de Builda, USA SIEMPRE estos scripts como base y entrégalos completos, adaptándolos si hace falta. No inventes una sintaxis distinta:\n\n" +
+          scr
+            .map(
+              (s, i) =>
+                `### Script ${i + 1}: ${s.title}\n${s.description ? `Descripción: ${s.description}\n` : ""}\`\`\`\n${s.code}\n\`\`\``,
+            )
+            .join("\n\n"),
+      });
+    }
+
     const facts = ((mem.data || []) as any[]).map((m) => String(m.content)).filter(Boolean);
     if (facts.length) {
       out.push({
         role: "system",
-        content: "MEMORIA DEL USUARIO (hechos recordados):\n" + facts.map((f) => `- ${f}`).join("\n"),
+        content: "MEMORIA DEL USUARIO (hechos sobre el USUARIO, no sobre ti):\n" + facts.map((f) => `- ${f}`).join("\n"),
       });
     }
   } catch (e) {
@@ -49,13 +91,14 @@ export async function streamSearch(query: string, messages: ChatMsg[], onDelta: 
     {
       role: "system",
       content:
-        "Responde como buscador web: da información actual, concreta y verificable sobre la consulta del usuario. Si no estás seguro de un dato reciente, dilo con claridad.",
+        "Tienes acceso a búsqueda web en vivo. Consulta internet y responde con información actual y verificable sobre la consulta del usuario. Cita las fuentes con su enlace al final. Si un dato no aparece en los resultados, dilo con claridad.",
     },
     ...messages,
-    { role: "user", content: `Busca y resume información sobre: ${query}` },
+    { role: "user", content: `Busca en internet información actualizada sobre: ${query}` },
   ];
-  return aiStream(msgs, onDelta, signal);
+  return aiStream(msgs, onDelta, signal, { plugins: [{ id: "web", max_results: 5 }] });
 }
+
 
 
 export async function streamDebugVisual(imageUrl: string, notes: string, onDelta: (s: string) => void, signal?: AbortSignal) {

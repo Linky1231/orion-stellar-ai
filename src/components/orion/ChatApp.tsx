@@ -38,6 +38,8 @@ export function ChatApp() {
   const [imageMode, setImageMode] = useState(false);
   const [searchMode, setSearchMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }); }, [messages, streaming]);
 
@@ -103,7 +105,13 @@ export function ChatApp() {
       const tempId = "img-" + Date.now();
       setMessages((m) => [...m, { id: tempId, conversation_id: id, role: "assistant", content: "Preparando imagen…", attachments: [], created_at: new Date().toISOString() }]);
       try {
-        const url = await generateImage(text);
+        const raw = await generateImage(text);
+        let url = raw;
+        if (raw.startsWith("data:")) {
+          const blob = await (await fetch(raw)).blob();
+          url = await uploadAttachment(new File([blob], `orion-${Date.now()}.png`, { type: blob.type || "image/png" }));
+        }
+
         const { data: a } = await supabase.from("messages").insert({
           conversation_id: id, role: "assistant",
           content: `Aquí tienes tu imagen`,
@@ -124,17 +132,25 @@ export function ChatApp() {
     // Build chat history for AI (with multimodal content)
     const history: ChatMsg[] = messages.concat(saved ? [saved as DBMsg] : []).map((m) => {
       const imgs = (m.attachments || []).filter((a: any) => a.type?.startsWith("image"));
-      if (m.role === "user" && imgs.length) {
+      const vids = (m.attachments || []).filter((a: any) => a.type?.startsWith("video"));
+      if (m.role === "user" && (imgs.length || vids.length)) {
         return {
           role: "user",
           content: [
-            { type: "text", text: (searchMode ? "[Buscar info actualizada en internet] " : "") + m.content },
+            {
+              type: "text",
+              text:
+                (searchMode ? "[Buscar info actualizada en internet] " : "") +
+                (m.content || "Analiza el contenido adjunto y descríbelo con detalle."),
+            },
             ...imgs.map((a: any) => ({ type: "image_url", image_url: { url: a.url } })),
+            ...vids.map((a: any) => ({ type: "video_url", video_url: { url: a.url } })),
           ] as any,
         };
       }
-      return { role: m.role as any, content: m.content + (searchMode && m.role === "user" ? " [Si necesitas info actualizada, indícalo claramente]" : "") };
+      return { role: m.role as any, content: m.content };
     });
+
 
     // Stream assistant
     setStreaming(true);
@@ -166,11 +182,13 @@ export function ChatApp() {
 
   async function onFile(f: File) {
     sfx.tap();
+    if (f.size > 25 * 1024 * 1024) { sfx.error(); alert("El archivo es muy grande (máx. 25 MB)."); return; }
     try {
       const url = await uploadAttachment(f);
       setPending((p) => [...p, { url, type: f.type, name: f.name }]);
     } catch (e: any) { sfx.error(); alert(e.message); }
   }
+
 
   function newConv() { setConvId(null); setMessages([]); setSidebarOpen(false); }
 
@@ -247,7 +265,7 @@ export function ChatApp() {
               <div className="flex gap-2 mb-2 flex-wrap">
                 {pending.map((p, i) => (
                   <div key={i} className="relative bg-card border border-border rounded-xl p-1.5 pr-7 text-xs flex items-center gap-2">
-                    {p.type.startsWith("image") ? <img src={p.url} className="w-8 h-8 rounded object-cover" /> : <Paperclip className="w-4 h-4" />}
+                    {p.type.startsWith("image") ? <img src={p.url} className="w-8 h-8 rounded object-cover" /> : p.type.startsWith("video") ? <video src={p.url} className="w-8 h-8 rounded object-cover" muted /> : <Paperclip className="w-4 h-4" />}
                     <span className="max-w-[120px] truncate">{p.name}</span>
                     <button className="absolute right-1 top-1 p-0.5 hover:bg-accent rounded" onClick={() => setPending(pending.filter((_, j) => j !== i))}>
                       <X className="w-3 h-3" />
@@ -271,7 +289,23 @@ export function ChatApp() {
                 rows={1}
                 className="flex-1 bg-transparent outline-none resize-none px-3 py-2 text-sm max-h-40 placeholder:text-muted-foreground"
               />
+              <button onClick={() => { sfx.tap(); fileRef.current?.click(); }} className="tap btn-glass p-2 rounded-xl" title="Adjuntar imagen o video">
+                <Paperclip className="w-4 h-4" />
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  files.forEach((f) => onFile(f));
+                  e.target.value = "";
+                }}
+              />
               <button onClick={() => { sfx.tap(); setImageMode((v) => !v); if (!imageMode) setSearchMode(false); }} className={`tap p-2 rounded-xl ${imageMode ? "btn-cosmic" : "btn-glass"}`} title="Generar imagen">
+
                 <ImagePlus className="w-4 h-4" />
               </button>
               <button onClick={() => { sfx.tap(); setSearchMode((v) => !v); if (!searchMode) setImageMode(false); }} className={`tap p-2 rounded-xl ${searchMode ? "btn-cosmic" : "btn-glass"}`} title="Buscar info">
@@ -338,9 +372,12 @@ function Bubble({ m }: { m: DBMsg }) {
         {(m.attachments || []).map((a: any, i) => (
           a.type?.startsWith("image") ? (
             <GeneratedImage key={i} src={a.url} />
+          ) : a.type?.startsWith("video") ? (
+            <video key={i} src={a.url} controls playsInline className="rounded-2xl max-h-80 border border-border shadow-soft" />
           ) : (
             <a key={i} href={a.url} target="_blank" className="text-xs underline">{a.name}</a>
           )
+
         ))}
         {m.content && (
           <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed

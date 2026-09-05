@@ -7,7 +7,7 @@ export async function aiStream(
   messages: AiMessage[],
   onDelta: (s: string) => void,
   signal?: AbortSignal,
-  opts: { model?: string; max_tokens?: number } = {},
+  opts: { model?: string; max_tokens?: number; plugins?: any[] } = {},
 ) {
   const res = await fetch("/api/ai/chat", {
     method: "POST",
@@ -17,9 +17,11 @@ export async function aiStream(
       stream: true,
       max_tokens: opts.max_tokens ?? 8192,
       messages,
+      ...(opts.plugins ? { plugins: opts.plugins } : {}),
     }),
     signal,
   });
+
   if (!res.ok || !res.body) throw new Error(`Error del proveedor (${res.status})`);
 
   const reader = res.body.getReader();
