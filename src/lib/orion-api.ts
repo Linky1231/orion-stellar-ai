@@ -96,7 +96,7 @@ export async function streamSearch(query: string, messages: ChatMsg[], onDelta: 
     ...messages,
     { role: "user", content: `Busca en internet información actualizada sobre: ${query}` },
   ];
-  return aiStream(msgs, onDelta, signal, { plugins: [{ id: "web", max_results: 5 }] });
+  return aiStream(msgs, onDelta, signal, { mode: "search" });
 }
 
 
