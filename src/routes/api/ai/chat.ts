@@ -41,14 +41,13 @@ export const Route = createFileRoute("/api/ai/chat")({
           .map((m) => `${m.role === "assistant" ? "Orión" : "Usuario"}: ${flatten(m.content)}`)
           .join("\n");
 
-        const prompt = [systems.join("\n\n"), last ? flatten(last.content) : ""].filter(Boolean).join("\n\n");
+        const prompt = [systems.join("\n\n"), history ? `HISTORIAL:\n${history}` : "", last ? flatten(last.content) : ""]
+          .filter(Boolean)
+          .join("\n\n");
 
         const url = new URL(ENDPOINT);
         url.searchParams.set("prompt", prompt);
         url.searchParams.set("model", body.model || "gpt-4o");
-        url.searchParams.set("isPro", "true");
-        if (body.mode) url.searchParams.set("mode", body.mode);
-        if (history) url.searchParams.set("history", history);
         const token = process.env["PREXZY_TOKEN"];
         if (token) url.searchParams.set("token", token);
 
@@ -61,22 +60,16 @@ export const Route = createFileRoute("/api/ai/chat")({
           }
           try {
             const json: any = JSON.parse(raw);
-            text =
-              json?.result ??
-              json?.response ??
-              json?.data?.response ??
-              json?.data?.result ??
-              json?.message ??
-              json?.answer ??
-              (typeof json?.data === "string" ? json.data : "") ??
-              "";
-            if (!text && typeof json === "string") text = json;
+            const r = json?.result;
+            if (Array.isArray(r?.text)) text = r.text.join("");
+            else text = r?.text || r?.response || json?.response || json?.message || "";
           } catch {
             text = raw;
           }
         } catch (e) {
           return Response.json({ error: "No se pudo conectar con el proveedor." }, { status: 502 });
         }
+
 
         if (!text) return Response.json({ error: "El proveedor no devolvió respuesta." }, { status: 502 });
 
