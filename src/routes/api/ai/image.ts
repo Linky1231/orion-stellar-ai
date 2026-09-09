@@ -1,67 +1,44 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const GATEWAY = "https://ai.gateway.lovable.dev/v1";
-
-async function gptImage(key: string, prompt: string): Promise<string | null> {
-  const res = await fetch(`${GATEWAY}/images/generations`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Lovable-API-Key": key,
-      "X-Lovable-AIG-SDK": "fetch",
-    },
-    body: JSON.stringify({ model: "openai/gpt-image-2", prompt, n: 1, size: "1024x1024" }),
-  });
-  const json: any = await res.json().catch(() => null);
-  if (!res.ok) return null;
-  const item = json?.data?.[0];
-  if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
-  if (item?.url) return String(item.url);
-  return null;
-}
-
-async function geminiImage(key: string, prompt: string): Promise<{ url?: string; error?: string; status: number }> {
-  const res = await fetch(`${GATEWAY}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Lovable-API-Key": key,
-      "X-Lovable-AIG-SDK": "fetch",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-3-pro-image",
-      modalities: ["image", "text"],
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  const json: any = await res.json().catch(() => null);
-  if (!res.ok) return { error: json?.error?.message || `Error del generador (${res.status})`, status: res.status };
-  const url = json?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  return url ? { url: String(url), status: 200 } : { error: "El generador no devolvió ninguna imagen.", status: 502 };
-}
+const ENDPOINT = "https://prexzyapis.com/ai/aiserv";
 
 export const Route = createFileRoute("/api/ai/image")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const key = process.env["LOVABLE_API_KEY"];
-        if (!key) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
-
         const { prompt } = (await request.json().catch(() => ({}))) as { prompt?: string };
-        if (!prompt) {
-          return Response.json({ error: "Falta la descripción de la imagen." }, { status: 400 });
-        }
+        if (!prompt) return Response.json({ error: "Falta la descripción de la imagen." }, { status: 400 });
+
+        const url = new URL(ENDPOINT);
+        url.searchParams.set("prompt", prompt);
+        url.searchParams.set("mode", "image");
+        url.searchParams.set("model", "flux");
+        url.searchParams.set("isPro", "true");
+        const token = process.env["PREXZY_TOKEN"];
+        if (token) url.searchParams.set("token", token);
 
         try {
-          const gpt = await gptImage(key, prompt);
-          if (gpt) return Response.json({ url: gpt, model: "openai/gpt-image-2" });
+          const res = await fetch(url.toString());
+          const ct = res.headers.get("content-type") || "";
+          if (ct.startsWith("image/")) {
+            const buf = await res.arrayBuffer();
+            const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+            return Response.json({ url: `data:${ct};base64,${b64}` });
+          }
+          const raw = await res.text();
+          if (!res.ok) return Response.json({ error: `Error del generador (${res.status})` }, { status: res.status });
+          let out = "";
+          try {
+            const json: any = JSON.parse(raw);
+            out = json?.url || json?.image || json?.result || json?.data?.url || json?.data?.image || "";
+          } catch {
+            out = raw.trim().startsWith("http") ? raw.trim() : "";
+          }
+          if (!out) return Response.json({ error: "El generador no devolvió ninguna imagen." }, { status: 502 });
+          return Response.json({ url: out });
         } catch {
-          /* cae al modelo de respaldo */
+          return Response.json({ error: "No se pudo conectar con el generador." }, { status: 502 });
         }
-
-        const fallback = await geminiImage(key, prompt);
-        if (fallback.url) return Response.json({ url: fallback.url, model: "google/gemini-3-pro-image" });
-        return Response.json({ error: fallback.error }, { status: fallback.status });
       },
     },
   },
