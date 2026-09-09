@@ -1,5 +1,5 @@
-export const AI_MODEL = "google/gemini-3.7-flash";
-export const AI_IMAGE_MODEL = "google/gemini-3-pro-image";
+export const AI_MODEL = "gpt-4o";
+export const AI_IMAGE_MODEL = "flux";
 
 export type AiMessage = { role: "user" | "assistant" | "system"; content: any };
 
@@ -7,22 +7,21 @@ export async function aiStream(
   messages: AiMessage[],
   onDelta: (s: string) => void,
   signal?: AbortSignal,
-  opts: { model?: string; max_tokens?: number; plugins?: any[] } = {},
+  opts: { model?: string; max_tokens?: number; plugins?: any[]; mode?: string } = {},
 ) {
   const res = await fetch("/api/ai/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: opts.model || AI_MODEL,
-      stream: true,
-      max_tokens: opts.max_tokens ?? 8192,
       messages,
-      ...(opts.plugins ? { plugins: opts.plugins } : {}),
+      ...(opts.mode ? { mode: opts.mode } : {}),
     }),
     signal,
   });
 
   if (!res.ok || !res.body) throw new Error(`Error del proveedor (${res.status})`);
+
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
