@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const ENDPOINT = "https://prexzyapis.com/ai/aiserv";
+const ENDPOINT = "https://prexzyapis.com/ai/aiwriter-chat";
 
 type Msg = { role: string; content: any };
 
