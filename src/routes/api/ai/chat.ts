@@ -41,37 +41,55 @@ export const Route = createFileRoute("/api/ai/chat")({
           .map((m) => `${m.role === "assistant" ? "Orión" : "Usuario"}: ${flatten(m.content)}`)
           .join("\n");
 
-        const prompt = [systems.join("\n\n"), history ? `HISTORIAL:\n${history}` : "", last ? flatten(last.content) : ""]
-          .filter(Boolean)
-          .join("\n\n");
+        const knowledge = systems.join("\n\n");
+        const question = last ? flatten(last.content) : "";
+        const hist = history ? `HISTORIAL:\n${history}` : "";
 
-        const url = new URL(ENDPOINT);
-        url.searchParams.set("prompt", prompt);
-        url.searchParams.set("model", body.model || "gpt-4o");
         const token = process.env["PREXZY_TOKEN"];
-        if (token) url.searchParams.set("token", token);
+
+        // El servicio recibe el prompt por URL: se prueban tamaños decrecientes
+        // para incluir la mayor cantidad posible de memoria/conocimiento.
+        const attempts: string[] = [];
+        for (const limit of [12000, 8000, 5000, 2500]) {
+          const k = knowledge.length > limit ? knowledge.slice(0, limit) : knowledge;
+          const h = hist.slice(0, Math.max(0, Math.floor(limit / 3)));
+          attempts.push([k, h, question].filter(Boolean).join("\n\n"));
+        }
+        attempts.push(question);
 
         let text = "";
-        try {
-          const res = await fetch(url.toString(), { headers: { Accept: "application/json" } });
-          const raw = await res.text();
-          if (!res.ok) {
-            return Response.json({ error: `Error del proveedor (${res.status})` }, { status: res.status });
-          }
+        let lastStatus = 502;
+        for (const prompt of attempts) {
+          const url = new URL(ENDPOINT);
+          url.searchParams.set("prompt", prompt);
+          url.searchParams.set("model", body.model || "gpt-4o");
+          if (token) url.searchParams.set("token", token);
           try {
-            const json: any = JSON.parse(raw);
-            const r = json?.result;
-            if (Array.isArray(r?.text)) text = r.text.join("");
-            else text = r?.text || r?.response || json?.response || json?.message || "";
+            const res = await fetch(url.toString(), {
+              headers: {
+                Accept: "application/json",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
+              },
+            });
+            lastStatus = res.status;
+            const raw = await res.text();
+            if (!res.ok) continue;
+            try {
+              const json: any = JSON.parse(raw);
+              const r = json?.result;
+              if (Array.isArray(r?.text)) text = r.text.join("");
+              else text = r?.text || r?.response || json?.response || json?.message || "";
+            } catch {
+              text = raw;
+            }
+            if (text) break;
           } catch {
-            text = raw;
+            /* siguiente intento */
           }
-        } catch (e) {
-          return Response.json({ error: "No se pudo conectar con el proveedor." }, { status: 502 });
         }
 
+        if (!text) return Response.json({ error: `El proveedor no respondió (${lastStatus}).` }, { status: 502 });
 
-        if (!text) return Response.json({ error: "El proveedor no devolvió respuesta." }, { status: 502 });
 
         // Se entrega como SSE para mantener el streaming del cliente.
         const stream = new ReadableStream({
