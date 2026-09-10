@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { aiStream, aiText, aiImage, AI_MODEL } from "@/lib/ai";
+import { visionStream } from "@/lib/vision";
 
 export type ChatMsg = { role: "user" | "assistant" | "system"; content: any };
 
