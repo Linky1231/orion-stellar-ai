@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const IMAGE_ENDPOINT = "https://prexzyapis.com/ai/aiwriter-image";
-const FALLBACK_ENDPOINT = "https://prexzyapis.com/ai/aiserv";
+const POLLINATIONS = "https://image.pollinations.ai/prompt/";
+const PREXZY_IMAGE = "https://prexzyapis.com/ai/aiwriter-image";
 
 function pickUrl(json: any): string {
   const r = json?.result ?? json;
@@ -11,9 +11,14 @@ function pickUrl(json: any): string {
     r?.image_url ||
     (Array.isArray(r?.images) ? r.images[0]?.url || r.images[0] : "") ||
     (Array.isArray(r?.data) ? r.data[0]?.url || r.data[0] : "") ||
-    (typeof r?.text === "string" && r.text.startsWith("http") ? r.text : "") ||
-    (Array.isArray(r?.text) && String(r.text[0] || "").startsWith("http") ? r.text[0] : "");
+    (typeof r?.text === "string" && r.text.startsWith("http") ? r.text : "");
   return typeof cand === "string" ? cand : "";
+}
+
+function toDataUrl(ct: string, buf: Uint8Array) {
+  let bin = "";
+  for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+  return `data:${ct};base64,${btoa(bin)}`;
 }
 
 export const Route = createFileRoute("/api/ai/image")({
@@ -23,47 +28,48 @@ export const Route = createFileRoute("/api/ai/image")({
         const { prompt, size } = (await request.json().catch(() => ({}))) as { prompt?: string; size?: string };
         if (!prompt) return Response.json({ error: "Falta la descripción de la imagen." }, { status: 400 });
 
-        const token = process.env["PREXZY_TOKEN"];
+        const [w, h] = (size || "1024x1024").split("x").map((n) => parseInt(n, 10) || 1024);
 
-        const primary = new URL(IMAGE_ENDPOINT);
-        primary.searchParams.set("prompt", prompt);
-        primary.searchParams.set("size", size || "1024x1024");
-        if (token) primary.searchParams.set("token", token);
-
-        const fallback = new URL(FALLBACK_ENDPOINT);
-        fallback.searchParams.set("prompt", prompt);
-        fallback.searchParams.set("mode", "image");
-        fallback.searchParams.set("isPro", "true");
-        if (token) fallback.searchParams.set("token", token);
-
-        let lastError = "El generador no devolvió ninguna imagen.";
-
-        for (const target of [primary, fallback]) {
-          try {
-            const res = await fetch(target.toString());
-            const ct = res.headers.get("content-type") || "";
-            if (ct.startsWith("image/")) {
-              const buf = new Uint8Array(await res.arrayBuffer());
-              let bin = "";
-              for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
-              return Response.json({ url: `data:${ct};base64,${btoa(bin)}` });
-            }
-            const raw = await res.text();
-            let json: any = null;
-            try {
-              json = JSON.parse(raw);
-            } catch {
-              if (raw.trim().startsWith("http")) return Response.json({ url: raw.trim() });
-            }
-            const url = pickUrl(json);
-            if (url) return Response.json({ url });
-            lastError = json?.result?.message || json?.message || lastError;
-          } catch {
-            lastError = "No se pudo conectar con el generador.";
+        // 1) Pollinations: gratis e ilimitado
+        try {
+          const url = new URL(POLLINATIONS + encodeURIComponent(prompt));
+          url.searchParams.set("width", String(w));
+          url.searchParams.set("height", String(h));
+          url.searchParams.set("nologo", "true");
+          url.searchParams.set("model", "flux");
+          url.searchParams.set("seed", String(Math.floor(Math.random() * 1e9)));
+          const res = await fetch(url.toString(), { headers: { "User-Agent": "Mozilla/5.0" } });
+          const ct = res.headers.get("content-type") || "";
+          if (res.ok && ct.startsWith("image/")) {
+            const buf = new Uint8Array(await res.arrayBuffer());
+            if (buf.length > 1000) return Response.json({ url: toDataUrl(ct, buf) });
           }
+        } catch {
+          /* siguiente proveedor */
         }
 
-        return Response.json({ error: lastError }, { status: 502 });
+        // 2) Prexzy como respaldo
+        try {
+          const url = new URL(PREXZY_IMAGE);
+          url.searchParams.set("prompt", prompt);
+          url.searchParams.set("size", size || "1024x1024");
+          const token = process.env["PREXZY_TOKEN"];
+          if (token) url.searchParams.set("token", token);
+          const res = await fetch(url.toString(), { headers: { "User-Agent": "Mozilla/5.0" } });
+          const ct = res.headers.get("content-type") || "";
+          if (ct.startsWith("image/")) {
+            const buf = new Uint8Array(await res.arrayBuffer());
+            return Response.json({ url: toDataUrl(ct, buf) });
+          }
+          const raw = await res.text();
+          if (raw.trim().startsWith("http")) return Response.json({ url: raw.trim() });
+          const found = pickUrl(JSON.parse(raw));
+          if (found) return Response.json({ url: found });
+        } catch {
+          /* sin respaldo */
+        }
+
+        return Response.json({ error: "El generador no devolvió ninguna imagen. Intenta de nuevo." }, { status: 502 });
       },
     },
   },
