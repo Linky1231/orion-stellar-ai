@@ -1,7 +1,24 @@
-export const AI_MODEL = "gpt-4o";
+import { getDeviceId } from "@/lib/device";
+import { visionStream } from "@/lib/vision";
+
+export const AI_MODEL = "gemini";
 export const AI_IMAGE_MODEL = "flux";
 
 export type AiMessage = { role: "user" | "assistant" | "system"; content: any };
+
+function collectMedia(messages: AiMessage[]): string[] {
+  const last = messages[messages.length - 1];
+  if (!last || !Array.isArray(last.content)) return [];
+  return last.content
+    .filter((p: any) => p?.type === "image_url" && p?.image_url?.url)
+    .map((p: any) => String(p.image_url.url));
+}
+
+function flattenText(content: any): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) return content.filter((p: any) => p?.type === "text").map((p: any) => p.text).join("\n");
+  return String(content ?? "");
+}
 
 export async function aiStream(
   messages: AiMessage[],
@@ -9,12 +26,24 @@ export async function aiStream(
   signal?: AbortSignal,
   opts: { model?: string; max_tokens?: number; plugins?: any[]; mode?: string } = {},
 ) {
+  // Si el último mensaje trae imágenes, se usa el motor de visión gratuito.
+  const media = collectMedia(messages);
+  if (media.length) {
+    const ctx = messages
+      .filter((m) => m.role === "system")
+      .map((m) => flattenText(m.content))
+      .join("\n\n")
+      .slice(0, 6000);
+    const q = flattenText(messages[messages.length - 1].content) || "Analiza el contenido y descríbelo con detalle.";
+    return visionStream([ctx, q].filter(Boolean).join("\n\n"), media, onDelta, signal);
+  }
+
   const res = await fetch("/api/ai/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: opts.model || AI_MODEL,
       messages,
+      sessionId: getDeviceId(),
       ...(opts.mode ? { mode: opts.mode } : {}),
     }),
     signal,

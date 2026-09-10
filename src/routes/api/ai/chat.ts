@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const ENDPOINT = "https://prexzyapis.com/ai/aiwriter-chat";
+const ENDPOINT = "https://prexzyapis.com/ai/gemini";
 
 type Msg = { role: string; content: any };
 
@@ -27,12 +27,11 @@ export const Route = createFileRoute("/api/ai/chat")({
       POST: async ({ request }) => {
         const body = (await request.json().catch(() => ({}))) as {
           messages?: Msg[];
-          model?: string;
           mode?: string;
+          sessionId?: string;
         };
         const messages = body.messages || [];
 
-        // Todo el conocimiento/memoria (system) va como preámbulo del prompt.
         const systems = messages.filter((m) => m.role === "system").map((m) => flatten(m.content));
         const convo = messages.filter((m) => m.role !== "system");
         const last = convo[convo.length - 1];
@@ -44,8 +43,7 @@ export const Route = createFileRoute("/api/ai/chat")({
         const knowledge = systems.join("\n\n");
         const question = last ? flatten(last.content) : "";
         const hist = history ? `HISTORIAL:\n${history}` : "";
-
-        const token = process.env["PREXZY_TOKEN"];
+        const sessionId = body.sessionId || "orion";
 
         // El servicio recibe el prompt por URL: se prueban tamaños decrecientes
         // para incluir la mayor cantidad posible de memoria/conocimiento.
@@ -62,13 +60,13 @@ export const Route = createFileRoute("/api/ai/chat")({
         for (const prompt of attempts) {
           const url = new URL(ENDPOINT);
           url.searchParams.set("prompt", prompt);
-          url.searchParams.set("model", body.model || "gpt-4o");
-          if (token) url.searchParams.set("token", token);
+          url.searchParams.set("session_id", sessionId);
           try {
             const res = await fetch(url.toString(), {
               headers: {
                 Accept: "application/json",
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
+                "User-Agent":
+                  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
               },
             });
             lastStatus = res.status;
@@ -76,9 +74,10 @@ export const Route = createFileRoute("/api/ai/chat")({
             if (!res.ok) continue;
             try {
               const json: any = JSON.parse(raw);
-              const r = json?.result;
-              if (Array.isArray(r?.text)) text = r.text.join("");
-              else text = r?.text || r?.response || json?.response || json?.message || "";
+              const r = json?.response ?? json?.result;
+              if (Array.isArray(r)) text = r.join("");
+              else if (typeof r === "string") text = r;
+              else text = r?.text || r?.response || json?.message || "";
             } catch {
               text = raw;
             }
@@ -89,7 +88,6 @@ export const Route = createFileRoute("/api/ai/chat")({
         }
 
         if (!text) return Response.json({ error: `El proveedor no respondió (${lastStatus}).` }, { status: 502 });
-
 
         // Se entrega como SSE para mantener el streaming del cliente.
         const stream = new ReadableStream({

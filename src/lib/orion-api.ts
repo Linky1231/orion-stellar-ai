@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { aiStream, aiText, aiImage, AI_MODEL } from "@/lib/ai";
+import { visionStream } from "@/lib/vision";
 
 export type ChatMsg = { role: "user" | "assistant" | "system"; content: any };
 
@@ -102,19 +103,12 @@ export async function streamSearch(query: string, messages: ChatMsg[], onDelta: 
 
 
 export async function streamDebugVisual(imageUrl: string, notes: string, onDelta: (s: string) => void, signal?: AbortSignal) {
-  const msgs: ChatMsg[] = [
-    {
-      role: "user",
-      content: [
-        {
-          type: "text",
-          text: `Analiza esta captura de pantalla y detecta errores o problemas de interfaz. Notas del usuario: ${notes || "(sin notas)"}`,
-        },
-        { type: "image_url", image_url: { url: imageUrl } },
-      ],
-    },
-  ];
-  return aiStream(msgs, onDelta, signal);
+  return visionStream(
+    `Eres Orión Estellar. Analiza esta captura de pantalla y detecta errores, fallos o problemas de interfaz. Explica causas probables y cómo solucionarlos.\nNotas del usuario: ${notes || "(sin notas)"}`,
+    [imageUrl],
+    onDelta,
+    signal,
+  );
 }
 
 // ---- Imágenes ----
